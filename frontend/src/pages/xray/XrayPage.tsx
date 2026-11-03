@@ -9,17 +9,20 @@ import {
   ConfigProvider,
   FloatButton,
   Layout,
-  message,
   Radio,
   Result,
   Row,
+  Select,
   Space,
   Spin,
+  Tag,
+  message,
 } from 'antd';
 
 import { useTheme } from '@/hooks/useTheme';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useXraySetting } from '@/hooks/useXraySetting';
+import { useNodesQuery } from '@/api/queries/useNodesQuery';
 import type { XraySettingsValue } from '@/hooks/useXraySetting';
 import AppSidebar from '@/layouts/AppSidebar';
 import { JsonEditor } from '@/components/form';
@@ -41,7 +44,21 @@ const SECTION_SLUGS = ['basic', 'routing', 'outbound', 'balancer', 'dns', 'advan
 
 type AdvKey = 'xraySetting' | 'inboundSettings' | 'outboundSettings' | 'routingRuleSettings';
 
+// The Xray settings page edits either the global template or the template of one node.
+// Switching the target remounts the editor so unsaved edits never leak between templates.
 export default function XrayPage() {
+  const [nodeId, setNodeId] = useState(0);
+  return <XrayEditor key={nodeId} nodeId={nodeId} onNodeChange={setNodeId} />;
+}
+
+function XrayEditor({
+  nodeId,
+  onNodeChange,
+}: {
+  nodeId: number;
+  onNodeChange: (id: number) => void;
+}) {
+  const { nodes } = useNodesQuery();
   const { t } = useTranslation();
   const { isDark, isUltra, antdThemeConfig } = useTheme();
   const { isMobile } = useMediaQuery();
@@ -49,7 +66,7 @@ export default function XrayPage() {
   useEffect(() => {
     setMessageInstance(messageApi);
   }, [messageApi]);
-  const xs = useXraySetting();
+  const xs = useXraySetting(nodeId);
   const {
     fetched,
     spinning,
@@ -76,6 +93,8 @@ export default function XrayPage() {
     testAllOutbounds,
     saveAll,
     resetToDefault,
+    nodeOverride,
+    resetNodeTemplate,
   } = xs;
 
   const [advSettings, setAdvSettings] = useState<AdvKey>('xraySetting');
@@ -306,6 +325,31 @@ export default function XrayPage() {
                 <Row gutter={[isMobile ? 8 : 16, isMobile ? 0 : 12]}>
                   <Col span={24}>
                     <Card hoverable>
+                      <Space wrap style={{ marginBottom: 12 }}>
+                        <span>{t('pages.xray.templateFor')}</span>
+                        <Select
+                          style={{ minWidth: 220 }}
+                          value={nodeId}
+                          onChange={onNodeChange}
+                          options={[
+                            { value: 0, label: t('pages.xray.allNodes') },
+                            ...nodes.map((n) => ({ value: n.id, label: n.name ?? String(n.id) })),
+                          ]}
+                          aria-label={t('pages.xray.templateFor')}
+                        />
+                        {nodeId > 0 && (
+                          <Tag color={nodeOverride ? 'blue' : 'default'}>
+                            {nodeOverride
+                              ? t('pages.xray.ownTemplate')
+                              : t('pages.xray.usesGlobalTemplate')}
+                          </Tag>
+                        )}
+                        {nodeId > 0 && nodeOverride && (
+                          <Button size="small" onClick={() => resetNodeTemplate()}>
+                            {t('pages.xray.useGlobalTemplate')}
+                          </Button>
+                        )}
+                      </Space>
                       <Row className="header-row">
                         <Col xs={24} sm={14} className="header-actions">
                           <Space>

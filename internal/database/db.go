@@ -72,6 +72,7 @@ func allModels() []any {
 		&model.HistoryOfSeeders{},
 		&model.Node{},
 		&model.NodeEnrollment{},
+		&model.NodeXrayTemplate{},
 		&model.ApiToken{},
 		&model.ClientRecord{},
 		&model.ClientInbound{},

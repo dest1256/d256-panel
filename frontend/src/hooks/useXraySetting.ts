@@ -98,12 +98,21 @@ export interface UseXraySettingResult {
   testAllOutbounds: (mode?: string) => Promise<void>;
   saveAll: () => Promise<void>;
   resetToDefault: () => Promise<void>;
+  // True when the selected node has its own template; always false for the global one.
+  nodeOverride: boolean;
+  resetNodeTemplate: () => Promise<void>;
 }
 
 type XrayConfigPayload = z.infer<typeof XrayConfigPayloadSchema>;
 
 export async function fetchXrayConfig(): Promise<XrayConfigPayload> {
-  const msg = await HttpUtil.post('/panel/api/xray/', undefined, { silent: true });
+  return fetchXrayConfigForNode(0);
+}
+
+async function fetchXrayConfigForNode(nodeId: number): Promise<XrayConfigPayload> {
+  const msg = await HttpUtil.post('/panel/api/xray/', nodeId ? { nodeId } : undefined, {
+    silent: true,
+  });
   if (!msg?.success) throw new Error(msg?.msg || 'Failed to load xray config');
   if (typeof msg.obj !== 'string')
     throw new Error('Malformed xray config response: expected string');
@@ -131,12 +140,12 @@ async function fetchOutboundsTraffic(): Promise<OutboundTrafficRow[]> {
   return Array.isArray(validated.obj) ? validated.obj : [];
 }
 
-export function useXraySetting(): UseXraySettingResult {
+export function useXraySetting(nodeId = 0): UseXraySettingResult {
   const queryClient = useQueryClient();
 
   const configQuery = useQuery({
-    queryKey: keys.xray.config(),
-    queryFn: fetchXrayConfig,
+    queryKey: [...keys.xray.config(), nodeId],
+    queryFn: () => fetchXrayConfigForNode(nodeId),
     staleTime: Infinity,
   });
 
@@ -257,6 +266,7 @@ export function useXraySetting(): UseXraySettingResult {
       const msg = await HttpUtil.post('/panel/api/xray/update', {
         xraySetting: sentXraySetting,
         outboundTestUrl: sentTestUrl,
+        ...(nodeId ? { nodeId } : {}),
       });
       return { msg, sentXraySetting, sentTestUrl };
     },
@@ -497,6 +507,12 @@ export function useXraySetting(): UseXraySettingResult {
     savedOutboundTestUrl === normalizeOutboundTestUrl(outboundTestUrl);
 
   const outboundsTraffic = useMemo(() => trafficQuery.data ?? [], [trafficQuery.data]);
+  const nodeOverride = !!nodeId && !!config?.nodeOverride;
+  const resetNodeTemplate = useCallback(async () => {
+    if (!nodeId) return;
+    const msg = await HttpUtil.post('/panel/api/xray/resetNodeTemplate', { nodeId });
+    if (msg?.success) await queryClient.invalidateQueries({ queryKey: keys.xray.config() });
+  }, [nodeId, queryClient]);
 
   return useMemo(
     () => ({
@@ -526,6 +542,8 @@ export function useXraySetting(): UseXraySettingResult {
       testAllOutbounds,
       saveAll,
       resetToDefault,
+      nodeOverride,
+      resetNodeTemplate,
     }),
     [
       fetched,
@@ -554,6 +572,8 @@ export function useXraySetting(): UseXraySettingResult {
       testAllOutbounds,
       saveAll,
       resetToDefault,
+      nodeOverride,
+      resetNodeTemplate,
     ],
   );
 }

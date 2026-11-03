@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -38,6 +39,7 @@ func (a *XraySettingController) initRouter(g *gin.RouterGroup) {
 
 	g.POST("/", a.getXraySetting)
 	g.POST("/update", a.updateSetting)
+	g.POST("/resetNodeTemplate", a.resetNodeTemplate)
 
 	g.GET("/geodata/files", a.geodataFiles)
 	g.GET("/geodata/categories", a.geodataCategories)
@@ -57,7 +59,12 @@ func (a *XraySettingController) initRouter(g *gin.RouterGroup) {
 
 // getXraySetting retrieves the Xray configuration template, inbound tags, and outbound test URL.
 func (a *XraySettingController) getXraySetting(c *gin.Context) {
+	nodeID := optionalNodeID(c)
 	xraySetting, err := a.SettingService.GetXrayConfigTemplate()
+	nodeOverride := false
+	if nodeID > 0 {
+		xraySetting, nodeOverride, err = a.SettingService.GetXrayConfigTemplateForNode(nodeID)
+	}
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.getSettings"), err)
 		return
@@ -70,7 +77,7 @@ func (a *XraySettingController) getXraySetting(c *gin.Context) {
 	// eventually produced the blank Xray Settings page in #4059.
 	// Strip any such wrapper here, and heal the DB if we found one so
 	// the next read is O(1) instead of climbing the same pile again.
-	if unwrapped := service.UnwrapXrayTemplateConfig(xraySetting); unwrapped != xraySetting {
+	if unwrapped := service.UnwrapXrayTemplateConfig(xraySetting); unwrapped != xraySetting && nodeID == 0 {
 		if saveErr := a.XraySettingService.SaveXraySetting(unwrapped); saveErr == nil {
 			xraySetting = unwrapped
 		} else {
@@ -98,6 +105,8 @@ func (a *XraySettingController) getXraySetting(c *gin.Context) {
 		"clientReverseTags": json.RawMessage(clientReverseTags),
 		"outboundTestUrl":   outboundTestUrl,
 		"geodataSources":    service.StandardGeodataSources(),
+		"nodeId":            nodeID,
+		"nodeOverride":      nodeOverride,
 	}
 
 	// Surface subscription outbounds (and their tags) so the frontend can:
@@ -123,6 +132,12 @@ func (a *XraySettingController) getXraySetting(c *gin.Context) {
 // outbounds or routing rules changed, with a process restart otherwise.
 func (a *XraySettingController) updateSetting(c *gin.Context) {
 	xraySetting := c.PostForm("xraySetting")
+	if nodeID := optionalNodeID(c); nodeID > 0 {
+		// A node's template is its own; the shared outbound test URL stays untouched.
+		err := a.XraySettingService.SaveNodeXraySetting(nodeID, xraySetting)
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+		return
+	}
 	if err := a.XraySettingService.SaveXraySetting(xraySetting); err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
 		return
@@ -366,4 +381,23 @@ func parseIntSafe(s string) (int, error) {
 	var v int
 	_, err := fmt.Sscanf(s, "%d", &v)
 	return v, err
+}
+
+// optionalNodeID reads the optional nodeId form field; 0 means the global template.
+func optionalNodeID(c *gin.Context) int {
+	id, err := strconv.Atoi(c.PostForm("nodeId"))
+	if err != nil || id < 0 {
+		return 0
+	}
+	return id
+}
+
+// resetNodeTemplate deletes a node's own template so the node uses the global one again.
+func (a *XraySettingController) resetNodeTemplate(c *gin.Context) {
+	nodeID := optionalNodeID(c)
+	if nodeID == 0 {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), errors.New("nodeId is required"))
+		return
+	}
+	jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), a.XraySettingService.DeleteNodeXraySetting(nodeID))
 }

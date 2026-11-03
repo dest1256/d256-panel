@@ -83,6 +83,9 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 // legacy panel-local inbounds (removed together with the local Xray).
 func (s *XrayService) buildXrayConfig(nodeID *int) (*xray.Config, error) {
 	templateConfig, err := s.settingService.GetXrayConfigTemplate()
+	if nodeID != nil {
+		templateConfig, _, err = s.settingService.GetXrayConfigTemplateForNode(*nodeID)
+	}
 	if err != nil {
 		return nil, err
 	}

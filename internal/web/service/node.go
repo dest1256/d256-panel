@@ -368,6 +368,9 @@ func (s *NodeService) Delete(id int) error {
 		if err := tx.Where("node_id = ?", id).Delete(&model.NodeClientTraffic{}).Error; err != nil {
 			return err
 		}
+		if err := deleteNodeTemplateTx(tx, id); err != nil {
+			return err
+		}
 		if err := tx.Where("node_id = ?", id).Delete(&model.NodePendingReset{}).Error; err != nil {
 			return err
 		}

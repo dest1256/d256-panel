@@ -1713,9 +1713,15 @@ export const sections: readonly Section[] = [
         method: 'POST',
         path: '/panel/api/xray/',
         summary:
-          'Return the Xray config template (JSON string), available inbound tags, client reverse tags, and the configured outbound test URL in one response.',
+          'Return the Xray config template (JSON string), available inbound tags, client reverse tags, and the configured outbound test URL in one response. Send the optional form field nodeId to get the own template of that node (nodeOverride tells whether it has one); without it, or without an override, the global template is returned.',
         response:
           '{\n  "success": true,\n  "obj": {\n    "xraySetting": "{...raw xray config...}",\n    "inboundTags": "[\\"in-443-tcp\\"]",\n    "clientReverseTags": "[]",\n    "outboundTestUrl": "https://www.google.com/generate_204"\n  }\n}',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/xray/resetNodeTemplate',
+        summary: "Delete a node's own Xray template so the node uses the global template again.",
+        params: [{ name: 'nodeId', in: 'body (form)', type: 'number', desc: 'Node ID.' }],
       },
       {
         method: 'GET',
@@ -1727,8 +1733,14 @@ export const sections: readonly Section[] = [
         method: 'POST',
         path: '/panel/api/xray/update',
         summary:
-          'Save the Xray JSON config template and optionally the outbound test URL. Both are sent as form fields.',
+          'Save the Xray JSON config template and optionally the outbound test URL. Both are sent as form fields. With the optional form field nodeId the template is saved as an override for that node instead of the global one.',
         params: [
+          {
+            name: 'nodeId',
+            in: 'body (form)',
+            type: 'number',
+            desc: 'Optional node ID: save the template for this node only.',
+          },
           {
             name: 'xraySetting',
             in: 'body (form)',

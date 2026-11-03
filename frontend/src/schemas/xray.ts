@@ -58,6 +58,9 @@ export const XrayConfigPayloadSchema = z
     subscriptionOutbounds: z.array(z.unknown()).optional(),
     subscriptionOutboundTags: z.array(z.string()).optional(),
     geodataSources: z.array(z.object({ url: z.string(), file: z.string() })).optional(),
+    // Set when the response is a node's template; nodeOverride is true if the node has its own.
+    nodeId: z.number().optional(),
+    nodeOverride: z.boolean().optional(),
   })
   .loose();
 

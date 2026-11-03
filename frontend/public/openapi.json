@@ -11627,7 +11627,7 @@
         "tags": [
           "Xray Settings"
         ],
-        "summary": "Return the Xray config template (JSON string), available inbound tags, client reverse tags, and the configured outbound test URL in one response.",
+        "summary": "Return the Xray config template (JSON string), available inbound tags, client reverse tags, and the configured outbound test URL in one response. Send the optional form field nodeId to get the own template of that node (nodeOverride tells whether it has one); without it, or without an override, the global template is returned.",
         "operationId": "post_panel_api_xray",
         "responses": {
           "200": {
@@ -11653,6 +11653,55 @@
                     "inboundTags": "[\"in-443-tcp\"]",
                     "clientReverseTags": "[]",
                     "outboundTestUrl": "https://www.google.com/generate_204"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/xray/resetNodeTemplate": {
+      "post": {
+        "tags": [
+          "Xray Settings"
+        ],
+        "summary": "Delete a node's own Xray template so the node uses the global template again.",
+        "operationId": "post_panel_api_xray_resetNodeTemplate",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "nodeId": {
+                    "type": "integer",
+                    "description": "Node ID."
+                  }
+                },
+                "required": [
+                  "nodeId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
                   }
                 }
               }
@@ -11696,7 +11745,7 @@
         "tags": [
           "Xray Settings"
         ],
-        "summary": "Save the Xray JSON config template and optionally the outbound test URL. Both are sent as form fields.",
+        "summary": "Save the Xray JSON config template and optionally the outbound test URL. Both are sent as form fields. With the optional form field nodeId the template is saved as an override for that node instead of the global one.",
         "operationId": "post_panel_api_xray_update",
         "requestBody": {
           "required": true,
@@ -11705,6 +11754,10 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "nodeId": {
+                    "type": "integer",
+                    "description": "Optional node ID: save the template for this node only."
+                  },
                   "xraySetting": {
                     "type": "string",
                     "description": "Full Xray JSON config template."
@@ -11715,6 +11768,7 @@
                   }
                 },
                 "required": [
+                  "nodeId",
                   "xraySetting"
                 ]
               }
