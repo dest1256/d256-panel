@@ -2,25 +2,15 @@
 
 ## Reporting a vulnerability
 
-Do not open a public issue for anything you believe is exploitable — an
-authentication bypass, remote code execution, injection, secret or
-credential exposure, privilege escalation. A public report gives attackers
-a head start against every 3x-ui deployment.
+Please do not open a public issue for anything exploitable (authentication bypass, injection, secret exposure, a node being able to
+read or write another node's data, and similar). Use GitHub's private vulnerability reporting: open this repository's **Security** tab
+and click **Report a vulnerability**. Include the version, reproduction steps and the impact.
 
-Instead, use GitHub's private vulnerability reporting: open this
-repository's **Security** tab and click **Report a vulnerability**. Include
-the affected 3x-ui version, reproduction steps, and the impact you see.
-You will receive replies in the advisory thread.
+This is an independent fork of [3x-ui](https://github.com/MHSanaei/3x-ui); issues that exist in upstream 3x-ui as well should also be
+reported to upstream. Only the latest release receives fixes.
 
-If you cannot use GitHub's private reporting, email the security contact
-at ho3ein.sanaei@gmail.com. Automated reports from Anthropic's OSS Scanner
-also go to this address.
+## What the design protects (and what it does not)
 
-There is no bug-bounty program. Fixes ship in the next release, and the
-advisory is published after a fixed version is available.
-
-## Supported versions
-
-Only the latest release receives security fixes. Update with the install
-script or your package channel and confirm the problem still exists before
-reporting.
+See the "Security and limitations" section of the README and `docs/ARCHITECTURE.md` (section 9). In short: nodes authenticate with
+certificates issued by the panel's internal CA; data from a node is validated and a node can only affect its own data. The data kept on
+a node (cache, journal) is not protected against someone who has root on the node server.
