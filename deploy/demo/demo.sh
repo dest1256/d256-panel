@@ -22,7 +22,7 @@ if [ "${1:-}" = stop ]; then stop; echo "demo removed"; exit 0; fi
 stop
 docker network create $NET >/dev/null
 
-docker run -d --name $PANEL --network $NET -p 2053:2053 -p 8444:8444 -v $PANEL-data:/data d256-panel:local >/dev/null
+docker run -d --name $PANEL --network $NET -p 2053:2053 -p 2096:2096 -p 8444:8444 -v $PANEL-data:/data d256-panel:local >/dev/null
 TOK=""
 for _ in $(seq 1 30); do
   TOK=$(docker exec $PANEL /app/d256-panel setting -getApiToken 2>/dev/null | awk '/apiToken:/{print $2}') && [ -n "$TOK" ] && break
@@ -77,4 +77,5 @@ echo
 echo "Panel:    http://localhost:2053/   login: admin / demo-admin-256"
 echo "Node:     demo-node (online), VLESS inbound on :20443, client alice@demo"
 echo "Open Clients -> alice@demo -> (i) -> Connections and traffic."
+echo "Subscription: open Clients -> alice@demo -> subscription link (served on :2096)"
 echo "Stop:     bash deploy/demo/demo.sh stop"

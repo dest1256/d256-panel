@@ -2,3 +2,9 @@
 	encode zstd gzip
 	reverse_proxy panel:2053
 }
+
+# Subscriptions are served by the panel on its own port (default 2096).
+{$PANEL_DOMAIN}:2096 {
+	encode zstd gzip
+	reverse_proxy panel:2096
+}
