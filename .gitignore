@@ -49,3 +49,4 @@ docker-compose.override.yml
 build/
 .cache/
 .smoke-client.json
+.demo-client.json
