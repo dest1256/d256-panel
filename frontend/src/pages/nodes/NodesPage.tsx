@@ -31,6 +31,7 @@ import AppSidebar from '@/layouts/AppSidebar';
 import NodeList from './NodeList';
 import NodeFormModal from './NodeFormModal';
 import EnrollModal from './EnrollModal';
+import ImportXuiModal from './ImportXuiModal';
 import { setMessageInstance } from '@/utils/messageBus';
 
 export default function NodesPage() {
@@ -50,6 +51,7 @@ export default function NodesPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<'add' | 'edit'>('add');
   const [formNode, setFormNode] = useState<NodeRecord | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [enroll, setEnroll] = useState<{ name: string; token: string } | null>(null);
 
   const onAdd = useCallback(() => {
@@ -192,6 +194,12 @@ export default function NodesPage() {
                     </Card>
                   </Col>
 
+                  <Col span={24} style={{ textAlign: 'end' }}>
+                    <Button onClick={() => setImportOpen(true)}>
+                      {t('pages.nodes.importXui')}
+                    </Button>
+                  </Col>
+
                   <Col span={24}>
                     <NodeList
                       nodes={nodes}
@@ -216,6 +224,12 @@ export default function NodesPage() {
           node={formNode}
           save={onSave}
           onOpenChange={setFormOpen}
+        />
+        <ImportXuiModal
+          open={importOpen}
+          nodes={nodes}
+          onClose={() => setImportOpen(false)}
+          onDone={() => refetch()}
         />
         <EnrollModal
           open={enroll !== null}

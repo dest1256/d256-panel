@@ -1409,6 +1409,15 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'POST',
+        path: '/panel/api/nodes/importXui/:id',
+        summary:
+          'Import a 3x-ui database (x-ui.db) into this node: its inbounds, clients and traffic counters are added (nothing existing is replaced). Unsupported protocols, duplicate client e-mails and port clashes are skipped and listed in the response. Multipart form, file field db (max 10 MiB).',
+        params: [{ name: 'id', in: 'path', type: 'number', desc: 'Target node ID.' }],
+        response:
+          '{\n  "success": true,\n  "obj": {"inbounds": 2, "clients": 5, "skipped": [{"remark": "mt", "port": 8443, "reason": "protocol mtproto is not supported"}]}\n}',
+      },
+      {
+        method: 'POST',
         path: '/panel/api/nodes/del/:id',
         summary: 'Delete a node. Refused while inbounds are still attached to it.',
         params: [{ name: 'id', in: 'path', type: 'number', desc: 'Node ID.' }],

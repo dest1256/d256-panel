@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Stage 7-8: import of a 3x-ui x-ui.db into a node (Nodes -> Import); security tests (anonymous/restricted-token access, CSRF, SQL injection, CSV formulas, hostile uploads); docker compose integration test (panel + 2 nodes + 2 clients); RU/EN READMEs; the inert LDAP settings tab is removed. The protected node mode was dropped by decision.
 - Stage 6: connection accounting. Per-destination usage (client x domain/IP x hour) is stored with retention and rollups; client info dialog shows traffic charts by node/inbound, live connections, domains and IPs (sort, search, node filter, CSV) and devices; device limit is enforced from the limits snapshot.
 - Stage 5: node offline mode. The panel sends client limit snapshots and accepts batches with time spans; usage is journaled on the node and delivered exactly once after an outage.
 - Per-node Xray templates (routing, outbounds, DNS) with fallback to the global template; template selector on the Xray page.

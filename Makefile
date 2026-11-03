@@ -93,6 +93,10 @@ release: verify image ## Full gate, then the runtime image
 smoke: ## End-to-end test: panel + node + Xray client (needs ../d256-node images and internet)
 	bash deploy/smoke/smoke.sh
 
+.PHONY: integration
+integration: ## docker compose: panel + 2 nodes + 2 clients, outage, exactly-once redelivery (needs images and internet)
+	bash deploy/integration/integration.sh
+
 .PHONY: verify
 verify: lint format-check typecheck test build vulncheck ## Full gate (mirrors CI)
 	@echo "verify: OK"

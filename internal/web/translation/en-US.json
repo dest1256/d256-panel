@@ -1192,7 +1192,8 @@
         "update": "Update node",
         "delete": "Delete node",
         "deleted": "Node deleted",
-        "fillRequired": "Name and address are required"
+        "fillRequired": "Name and address are required",
+        "import": "Import failed"
       },
       "createAndEnroll": "Create and get token",
       "addressHint": "Public host name or IP used in subscription links",
@@ -1223,7 +1224,13 @@
       "newTokenConfirmTitle": "Re-enroll {{name}}?",
       "newTokenConfirmContent": "The current certificate is revoked and the node disconnects until it is enrolled again with the new token.",
       "title": "Nodes",
-      "noNodes": "No nodes yet. Add one on the Nodes page."
+      "noNodes": "No nodes yet. Add one on the Nodes page.",
+      "importXui": "Import from x-ui.db",
+      "importXuiHint": "Adds the inbounds, clients and traffic of a 3x-ui database to the selected node. Nothing existing is replaced.",
+      "importXuiFile": "Select x-ui.db",
+      "importXuiDone": "Imported {{inbounds}} inbounds, {{clients}} clients",
+      "importXuiSkipped": "Skipped",
+      "importXuiNode": "Target node"
     },
     "settings": {
       "defaultTag": "Default",

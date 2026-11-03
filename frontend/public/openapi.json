@@ -9861,6 +9861,61 @@
         }
       }
     },
+    "/panel/api/nodes/importXui/{id}": {
+      "post": {
+        "tags": [
+          "Nodes"
+        ],
+        "summary": "Import a 3x-ui database (x-ui.db) into this node: its inbounds, clients and traffic counters are added (nothing existing is replaced). Unsupported protocols, duplicate client e-mails and port clashes are skipped and listed in the response. Multipart form, file field db (max 10 MiB).",
+        "operationId": "post_panel_api_nodes_importXui_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Target node ID.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "inbounds": 2,
+                    "clients": 5,
+                    "skipped": [
+                      {
+                        "remark": "mt",
+                        "port": 8443,
+                        "reason": "protocol mtproto is not supported"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/nodes/del/{id}": {
       "post": {
         "tags": [

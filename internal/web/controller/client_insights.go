@@ -127,6 +127,7 @@ func (a *ClientInsightsController) destinations(c *gin.Context) {
 		return
 	}
 	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("X-Content-Type-Options", "nosniff")
 	c.Header("Content-Disposition", `attachment; filename="destinations.csv"`)
 	w := csv.NewWriter(c.Writer)
 	_ = w.Write([]string{"destination", "network", "node", "upload_bytes", "download_bytes", "total_bytes", "connections"})

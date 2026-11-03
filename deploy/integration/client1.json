@@ -1,0 +1,3 @@
+{"log":{"loglevel":"warning"},
+ "inbounds":[{"listen":"0.0.0.0","port":1080,"protocol":"socks","settings":{"udp":false}}],
+ "outbounds":[{"protocol":"vless","settings":{"vnext":[{"address":"node1","port":20443,"users":[{"id":"6b0b0e3e-41b2-4f1c-9a16-0d5c1c1f3a11","encryption":"none"}]}]},"streamSettings":{"network":"tcp"}}]}

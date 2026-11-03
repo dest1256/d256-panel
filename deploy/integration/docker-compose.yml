@@ -1,0 +1,33 @@
+# Integration test topology: one panel, two nodes and two Xray clients (one per node).
+# Run it with deploy/integration/integration.sh; it needs the images d256-panel:local and
+# d256-node:local (make image in both repositories) and outbound internet access.
+name: d256it
+services:
+  panel:
+    image: d256-panel:local
+    volumes:
+      - panel-data:/data
+  node1:
+    image: d256-node:local
+    profiles: [nodes]
+    volumes:
+      - node1-data:/var/lib/d256-node
+  node2:
+    image: d256-node:local
+    profiles: [nodes]
+    volumes:
+      - node2-data:/var/lib/d256-node
+  client1:
+    image: teddysun/xray
+    profiles: [clients]
+    volumes:
+      - ./client1.json:/etc/xray/config.json:ro
+  client2:
+    image: teddysun/xray
+    profiles: [clients]
+    volumes:
+      - ./client2.json:/etc/xray/config.json:ro
+volumes:
+  panel-data:
+  node1-data:
+  node2-data:

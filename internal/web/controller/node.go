@@ -10,6 +10,7 @@ import (
 
 	"github.com/mhsanaei/3x-ui/v3/internal/nodelink"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/session"
 )
 
 type NodeController struct {
@@ -31,6 +32,7 @@ func (a *NodeController) initRouter(g *gin.RouterGroup) {
 	g.POST("/create", a.create)
 	g.POST("/update/:id", a.update)
 	g.POST("/enrollToken/:id", a.enrollToken)
+	g.POST("/importXui/:id", a.importXui)
 	g.POST("/del/:id", a.del)
 	g.POST("/setEnable/:id", a.setEnable)
 }
@@ -253,4 +255,26 @@ func (a *NodeController) history(c *gin.Context) {
 		return
 	}
 	jsonObj(c, a.nodeService.AggregateNodeMetric(id, metric, bucket, 60), nil)
+}
+
+// importXui adds the inbounds, clients and traffic of a 3x-ui database (x-ui.db) to this node.
+func (a *NodeController) importXui(c *gin.Context) {
+	id, ok := nodeID(c)
+	if !ok {
+		return
+	}
+	file, _, err := c.Request.FormFile("db")
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.index.readDatabaseError"), err)
+		return
+	}
+	defer file.Close()
+	var inbounds service.InboundService
+	res, err := inbounds.ImportXUIDB(file, id, session.GetLoginUser(c).Id)
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.import"), err)
+		return
+	}
+	notifyClientsChanged()
+	jsonObj(c, res, nil)
 }
