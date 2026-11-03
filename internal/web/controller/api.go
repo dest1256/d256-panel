@@ -216,6 +216,9 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	nodes := api.Group("/nodes")
 	a.nodeController = NewNodeController(nodes)
 
+	// Client insights — live connections, devices, destinations and traffic charts
+	NewClientInsightsController(api.Group("/clientInsights"))
+
 	// Hosts API — per-inbound override endpoints for subscription links
 	hosts := api.Group("/hosts")
 	a.hostController = NewHostController(hosts)

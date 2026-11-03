@@ -1440,6 +1440,135 @@ export const sections: readonly Section[] = [
   },
 
   {
+    id: 'clientInsights',
+    title: 'Client insights',
+    description:
+      'What the client info dialog shows: live connections and devices (from the nodes, refreshed every few seconds), per-destination usage and traffic charts (from the aggregates nodes report). All endpoints under /panel/api/clientInsights.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/panel/api/clientInsights/connections',
+        summary:
+          'Live connections of a client across all nodes: source IP, destination domain/IP, port, protocol, node, inbound, start time, bytes up/down.',
+        params: [{ name: 'email', in: 'query', type: 'string', desc: 'Client email.' }],
+        response:
+          '{\n  "success": true,\n  "obj": [\n    {"nodeId": 1, "node": "de-fra-1", "inbound": "in-443", "sourceIp": "203.0.113.5", "dest": "example.com", "port": 443, "network": "tcp", "start": 1760000000, "up": 1200, "down": 56000}\n  ]\n}',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/clientInsights/devices',
+        summary: 'Recent source IPs (devices) of a client across all nodes, with last-seen time.',
+        params: [{ name: 'email', in: 'query', type: 'string', desc: 'Client email.' }],
+        response:
+          '{\n  "success": true,\n  "obj": [\n    {"nodeId": 1, "node": "de-fra-1", "ip": "203.0.113.5", "lastSeen": 1760000000}\n  ]\n}',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/clientInsights/destinations',
+        summary:
+          'Domains and IPs a client reached during a period, with traffic and connection counts. Sortable, searchable, filterable by node; format=csv downloads it as CSV.',
+        params: [
+          { name: 'email', in: 'query', type: 'string', desc: 'Client email.' },
+          {
+            name: 'period',
+            in: 'query',
+            type: 'string',
+            desc: '1h, 24h, 7d, 30d or custom (then from/to are unix seconds). Defaults to 24h.',
+            optional: true,
+            defaultValue: '24h',
+          },
+          {
+            name: 'from',
+            in: 'query',
+            type: 'number',
+            desc: 'Unix seconds, custom period only.',
+            optional: true,
+          },
+          {
+            name: 'to',
+            in: 'query',
+            type: 'number',
+            desc: 'Unix seconds (exclusive), custom period only.',
+            optional: true,
+          },
+          { name: 'nodeId', in: 'query', type: 'number', desc: 'Only this node.', optional: true },
+          {
+            name: 'q',
+            in: 'query',
+            type: 'string',
+            desc: 'Substring of the destination.',
+            optional: true,
+          },
+          {
+            name: 'sort',
+            in: 'query',
+            type: 'string',
+            desc: 'dest, up, down, total or conns. Defaults to total.',
+            optional: true,
+            defaultValue: 'total',
+          },
+          {
+            name: 'order',
+            in: 'query',
+            type: 'string',
+            desc: 'asc or desc. Defaults to desc.',
+            optional: true,
+            defaultValue: 'desc',
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            type: 'number',
+            desc: 'Maximum rows (cap 5000).',
+            optional: true,
+          },
+          {
+            name: 'format',
+            in: 'query',
+            type: 'string',
+            desc: 'csv to download a CSV file instead of JSON.',
+            optional: true,
+          },
+        ],
+        response:
+          '{\n  "success": true,\n  "obj": [\n    {"dest": "example.com", "network": "tcp", "nodeId": 1, "node": "de-fra-1", "up": 1200, "down": 56000, "conns": 3, "total": 57200}\n  ]\n}',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/clientInsights/traffic',
+        summary: 'Upload/download of a client over time, as series per node and per inbound.',
+        params: [
+          { name: 'email', in: 'query', type: 'string', desc: 'Client email.' },
+          {
+            name: 'period',
+            in: 'query',
+            type: 'string',
+            desc: '1h, 24h, 7d, 30d or custom (then from/to are unix seconds). Defaults to 24h.',
+            optional: true,
+            defaultValue: '24h',
+          },
+          {
+            name: 'from',
+            in: 'query',
+            type: 'number',
+            desc: 'Unix seconds, custom period only.',
+            optional: true,
+          },
+          {
+            name: 'to',
+            in: 'query',
+            type: 'number',
+            desc: 'Unix seconds (exclusive), custom period only.',
+            optional: true,
+          },
+        ],
+        response:
+          '{\n  "success": true,\n  "obj": {\n    "from": 1759913600, "to": 1760000001, "step": 3600,\n    "total": {"t": 0, "up": 1200, "down": 56000},\n    "nodes": [{"name": "de-fra-1", "nodeId": 1, "points": [{"t": 1759996800, "up": 1200, "down": 56000}]}],\n    "inbounds": [{"name": "in-443", "nodeId": 0, "points": [{"t": 1759996800, "up": 1200, "down": 56000}]}]\n  }\n}',
+      },
+    ],
+  },
+
+  {
     id: 'hosts',
     title: 'Hosts',
     description:

@@ -48,6 +48,9 @@ type Snapshot struct {
 	XrayVersion string
 	LastSeen    time.Time
 	Online      bool
+	// Active is the node's latest live connection snapshot (replaced every few seconds).
+	Active   *pb.ActiveConnections
+	ActiveAt time.Time
 }
 
 // Hub tracks live node sessions and their latest metrics.
@@ -395,6 +398,8 @@ func (s *Server) handle(stream pb.NodeLink_ConnectServer, node *model.Node, st *
 		s.recordMetrics(node.Id, x.SystemMetrics)
 	case *pb.NodeToPanel_XrayStatus:
 		s.hub.update(node.Id, func(sn *Snapshot) { sn.Xray = x.XrayStatus })
+	case *pb.NodeToPanel_ActiveConnections:
+		s.hub.update(node.Id, func(sn *Snapshot) { sn.Active, sn.ActiveAt = capActive(x.ActiveConnections), time.Now() })
 	case *pb.NodeToPanel_StateAck:
 		s.recordStateAck(node.Id, x.StateAck)
 		st.onAck(x.StateAck.Version, x.StateAck.Ok)
@@ -442,4 +447,67 @@ func (s *Server) recordMetrics(id int, sm *pb.SystemMetrics) {
 	if err := s.node.UpdateHeartbeat(id, p); err != nil {
 		logger.Warning("node metrics update failed:", err)
 	}
+}
+
+// capActive bounds what one node can make the panel keep in memory.
+func capActive(a *pb.ActiveConnections) *pb.ActiveConnections {
+	const maxConns, maxIPs = 5000, 20000
+	if len(a.Conns) > maxConns {
+		a.Conns, a.Truncated = a.Conns[:maxConns], true
+	}
+	if len(a.Ips) > maxIPs {
+		a.Ips, a.Truncated = a.Ips[:maxIPs], true
+	}
+	return a
+}
+
+// NodeActive is a live connection together with the node it runs on.
+type NodeActive struct {
+	NodeID int
+	Conn   *pb.ActiveConn
+}
+
+// NodeIP is a device address together with the node it connected through.
+type NodeIP struct {
+	NodeID int
+	IP     *pb.ClientIp
+}
+
+// activeFresh is how old a node's connection snapshot may be before it is considered gone.
+const activeFresh = 30 * time.Second
+
+// ActiveFor returns the live connections of a client across all nodes.
+func (h *Hub) ActiveFor(email string) []NodeActive {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	var out []NodeActive
+	for id, sn := range h.snaps {
+		if !sn.Online || sn.Active == nil || time.Since(sn.ActiveAt) > activeFresh {
+			continue
+		}
+		for _, c := range sn.Active.Conns {
+			if c.Email == email {
+				out = append(out, NodeActive{NodeID: id, Conn: c})
+			}
+		}
+	}
+	return out
+}
+
+// IPsFor returns the recent source addresses (devices) of a client across all nodes.
+func (h *Hub) IPsFor(email string) []NodeIP {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	var out []NodeIP
+	for id, sn := range h.snaps {
+		if sn.Active == nil {
+			continue
+		}
+		for _, ip := range sn.Active.Ips {
+			if ip.Email == email {
+				out = append(out, NodeIP{NodeID: id, IP: ip})
+			}
+		}
+	}
+	return out
 }

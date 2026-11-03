@@ -301,6 +301,11 @@ func (s *Server) startTask(loc *time.Location) {
 
 	_, _ = s.cron.AddJob(cadenceReapOrphans, job.NewReapSyncOrphansJob())
 
+	// Roll per-destination usage and chart buckets up and drop what is past its retention.
+	retention := job.NewConnRetentionJob()
+	_, _ = s.cron.AddJob("@every 1h", retention)
+	common.GoRecover("conn-retention", retention.Run)
+
 	// Warm permanent routing URLs immediately and refresh them outside the
 	// latency-sensitive subscription request path.
 	remoteRoutingJob := job.NewRemoteRoutingJob()

@@ -15,7 +15,7 @@ CFG=./.smoke-client.json
 
 cleanup() {
   rm -f $CFG
-  docker rm -f $PANEL $NODE $CLIENT >/dev/null 2>&1 || true
+  docker rm -f $PANEL $NODE $CLIENT d256smoke-hold >/dev/null 2>&1 || true
   docker volume rm -f $PANEL-data $NODE-data >/dev/null 2>&1 || true
   docker network rm $NET >/dev/null 2>&1 || true
 }
@@ -83,6 +83,39 @@ for i in $(seq 1 20); do
 done
 echo "$T" | grep -o '"clientStats":\[[^]]*\]' | head -c 400; echo
 echo "$T" | grep -qE '"(up|down)":[1-9][0-9]*' || { echo "ACCOUNTING FAILED"; docker logs $NODE 2>&1 | tail -20; exit 1; }
+
+echo "== client insights: destinations, live connections, devices, traffic series"
+HOLD=d256smoke-hold
+docker run -d --name $HOLD --network $NET curlimages/curl sh -c "sleep 25 | curl -s -T - --max-time 25 -x socks5h://$CLIENT:1080 telnet://example.com:80" >/dev/null
+insights() { json -G --data-urlencode "email=alice@smoke" "$@"; }
+DEST=""
+for i in $(seq 1 20); do
+  DEST=$(insights $API/clientInsights/destinations --data-urlencode period=1h)
+  echo "$DEST" | grep -q '"dest":"example.com"' && break
+  sleep 1
+done
+echo "$DEST" | head -c 300; echo
+echo "$DEST" | grep -q '"dest":"example.com"' || { echo "DESTINATIONS FAILED"; docker logs $NODE 2>&1 | tail -10; exit 1; }
+echo "$DEST" | grep -qE '"down":[1-9]' || { echo "DESTINATIONS HAVE NO BYTES"; exit 1; }
+ACT=""
+for i in $(seq 1 20); do
+  ACT=$(insights $API/clientInsights/connections)
+  echo "$ACT" | grep -q '"dest":"example.com"' && break
+  sleep 1
+done
+echo "$ACT" | head -c 300; echo
+echo "$ACT" | grep -q '"dest":"example.com"' || { echo "ACTIVE CONNECTIONS FAILED"; exit 1; }
+echo "$ACT" | grep -q '"node":"smoke-1"' || { echo "ACTIVE CONNECTION HAS NO NODE NAME"; exit 1; }
+DEV=$(insights $API/clientInsights/devices)
+echo "$DEV" | head -c 200; echo
+echo "$DEV" | grep -qE '"ip":"[0-9a-f.:]+"' || { echo "DEVICES FAILED"; exit 1; }
+TR=$(insights $API/clientInsights/traffic --data-urlencode period=1h)
+echo "$TR" | head -c 300; echo
+echo "$TR" | grep -q '"name":"smoke-1"' || { echo "TRAFFIC SERIES FAILED"; exit 1; }
+CSV=$(insights $API/clientInsights/destinations --data-urlencode period=1h --data-urlencode format=csv)
+echo "$CSV" | head -3
+echo "$CSV" | grep -q '^destination,network,node' || { echo "CSV FAILED"; exit 1; }
+docker rm -f $HOLD >/dev/null 2>&1 || true
 
 echo "== subscription uses the node address"
 SUBPATH=$(json -X POST $API/setting/all | grep -o '"subPath":"[^"]*"' | cut -d'"' -f4)

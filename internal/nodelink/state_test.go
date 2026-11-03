@@ -251,6 +251,7 @@ func TestLimitsSnapshotCarriesQuotaUsageAndExpiry(t *testing.T) {
 	addClient(t, ib2, "bob@example.com")
 	database.GetDB().Model(&xray.ClientTraffic{}).Where("email = ?", "alice@example.com").
 		Updates(map[string]any{"total": 1000, "up": 100, "down": 200, "expiry_time": 1893456000000})
+	database.GetDB().Model(&model.ClientRecord{}).Where("email = ?", "alice@example.com").Update("limit_ip", 2)
 	srv := startServer(t, svc)
 	st, cancel := openStream(t, svc, srv, n1, 3)
 	defer cancel()
@@ -264,7 +265,7 @@ func TestLimitsSnapshotCarriesQuotaUsageAndExpiry(t *testing.T) {
 		t.Fatalf("a node must only get its own clients, got %v", clients)
 	}
 	c := clients[0]
-	if c.Email != "alice@example.com" || c.QuotaBytes != 1000 || c.UsedBytes != 300 || c.ExpiryUnix != 1893456000 {
+	if c.Email != "alice@example.com" || c.QuotaBytes != 1000 || c.UsedBytes != 300 || c.ExpiryUnix != 1893456000 || c.DeviceLimit != 2 {
 		t.Fatalf("limit = %+v", c)
 	}
 }

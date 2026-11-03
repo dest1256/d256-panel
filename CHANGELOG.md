@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Stage 6: connection accounting. Per-destination usage (client x domain/IP x hour) is stored with retention and rollups; client info dialog shows traffic charts by node/inbound, live connections, domains and IPs (sort, search, node filter, CSV) and devices; device limit is enforced from the limits snapshot.
 - Stage 5: node offline mode. The panel sends client limit snapshots and accepts batches with time spans; usage is journaled on the node and delivered exactly once after an outage.
 - Per-node Xray templates (routing, outbounds, DNS) with fallback to the global template; template selector on the Xray page.
 - TUIC removed from the product (Hysteria stays: it is an Xray protocol).

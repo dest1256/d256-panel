@@ -4532,6 +4532,10 @@
       "description": "Manage d256 nodes (Xray daemons that dial in over gRPC + mTLS). All endpoints under /panel/api/nodes. Enrollment itself is POST {basePath}/d256/enroll, authenticated by the one-time token only."
     },
     {
+      "name": "Client insights",
+      "description": "What the client info dialog shows: live connections and devices (from the nodes, refreshed every few seconds), per-destination usage and traffic charts (from the aggregates nodes report). All endpoints under /panel/api/clientInsights."
+    },
+    {
       "name": "Hosts",
       "description": "Per-inbound override endpoints. Each enabled host renders one extra subscription link/proxy with its own address/port/TLS, superseding the legacy externalProxy array. All endpoints under /panel/api/hosts."
     },
@@ -10003,6 +10007,364 @@
                       "type": "string"
                     },
                     "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/clientInsights/connections": {
+      "get": {
+        "tags": [
+          "Client insights"
+        ],
+        "summary": "Live connections of a client across all nodes: source IP, destination domain/IP, port, protocol, node, inbound, start time, bytes up/down.",
+        "operationId": "get_panel_api_clientInsights_connections",
+        "parameters": [
+          {
+            "name": "email",
+            "in": "query",
+            "required": true,
+            "description": "Client email.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": [
+                    {
+                      "nodeId": 1,
+                      "node": "de-fra-1",
+                      "inbound": "in-443",
+                      "sourceIp": "203.0.113.5",
+                      "dest": "example.com",
+                      "port": 443,
+                      "network": "tcp",
+                      "start": 1760000000,
+                      "up": 1200,
+                      "down": 56000
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/clientInsights/devices": {
+      "get": {
+        "tags": [
+          "Client insights"
+        ],
+        "summary": "Recent source IPs (devices) of a client across all nodes, with last-seen time.",
+        "operationId": "get_panel_api_clientInsights_devices",
+        "parameters": [
+          {
+            "name": "email",
+            "in": "query",
+            "required": true,
+            "description": "Client email.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": [
+                    {
+                      "nodeId": 1,
+                      "node": "de-fra-1",
+                      "ip": "203.0.113.5",
+                      "lastSeen": 1760000000
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/clientInsights/destinations": {
+      "get": {
+        "tags": [
+          "Client insights"
+        ],
+        "summary": "Domains and IPs a client reached during a period, with traffic and connection counts. Sortable, searchable, filterable by node; format=csv downloads it as CSV.",
+        "operationId": "get_panel_api_clientInsights_destinations",
+        "parameters": [
+          {
+            "name": "email",
+            "in": "query",
+            "required": true,
+            "description": "Client email.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "period",
+            "in": "query",
+            "required": false,
+            "description": "1h, 24h, 7d, 30d or custom (then from/to are unix seconds). Defaults to 24h.",
+            "schema": {
+              "type": "string",
+              "default": "24h"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Unix seconds, custom period only.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Unix seconds (exclusive), custom period only.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "nodeId",
+            "in": "query",
+            "required": false,
+            "description": "Only this node.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Substring of the destination.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "dest, up, down, total or conns. Defaults to total.",
+            "schema": {
+              "type": "string",
+              "default": "total"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "description": "asc or desc. Defaults to desc.",
+            "schema": {
+              "type": "string",
+              "default": "desc"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum rows (cap 5000).",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "description": "csv to download a CSV file instead of JSON.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": [
+                    {
+                      "dest": "example.com",
+                      "network": "tcp",
+                      "nodeId": 1,
+                      "node": "de-fra-1",
+                      "up": 1200,
+                      "down": 56000,
+                      "conns": 3,
+                      "total": 57200
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/clientInsights/traffic": {
+      "get": {
+        "tags": [
+          "Client insights"
+        ],
+        "summary": "Upload/download of a client over time, as series per node and per inbound.",
+        "operationId": "get_panel_api_clientInsights_traffic",
+        "parameters": [
+          {
+            "name": "email",
+            "in": "query",
+            "required": true,
+            "description": "Client email.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "period",
+            "in": "query",
+            "required": false,
+            "description": "1h, 24h, 7d, 30d or custom (then from/to are unix seconds). Defaults to 24h.",
+            "schema": {
+              "type": "string",
+              "default": "24h"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Unix seconds, custom period only.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Unix seconds (exclusive), custom period only.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "from": 1759913600,
+                    "to": 1760000001,
+                    "step": 3600,
+                    "total": {
+                      "t": 0,
+                      "up": 1200,
+                      "down": 56000
+                    },
+                    "nodes": [
+                      {
+                        "name": "de-fra-1",
+                        "nodeId": 1,
+                        "points": [
+                          {
+                            "t": 1759996800,
+                            "up": 1200,
+                            "down": 56000
+                          }
+                        ]
+                      }
+                    ],
+                    "inbounds": [
+                      {
+                        "name": "in-443",
+                        "nodeId": 0,
+                        "points": [
+                          {
+                            "t": 1759996800,
+                            "up": 1200,
+                            "down": 56000
+                          }
+                        ]
+                      }
+                    ]
                   }
                 }
               }

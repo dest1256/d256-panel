@@ -297,3 +297,22 @@ func GetNodeLinkPort() int {
 	}
 	return 8444
 }
+
+func envDays(name string, def int) int {
+	if v := os.Getenv(name); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 1 && n <= 3650 {
+			return n
+		}
+	}
+	return def
+}
+
+// GetConnRetentionDays is how long per-destination usage is kept hour by hour before it is rolled up
+// into days (XUI_CONN_RETENTION_DAYS, default 30).
+func GetConnRetentionDays() int { return envDays("XUI_CONN_RETENTION_DAYS", 30) }
+
+// GetConnDailyRetentionDays is how long the daily roll-ups are kept (XUI_CONN_DAILY_RETENTION_DAYS, default 365).
+func GetConnDailyRetentionDays() int { return envDays("XUI_CONN_DAILY_RETENTION_DAYS", 365) }
+
+// GetTrafficBucketRetentionDays is how long traffic chart data is kept (XUI_TRAFFIC_RETENTION_DAYS, default 90).
+func GetTrafficBucketRetentionDays() int { return envDays("XUI_TRAFFIC_RETENTION_DAYS", 90) }

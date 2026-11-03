@@ -170,7 +170,7 @@ func allowedNames(nodeID int) (emails, tags map[string]struct{}, err error) {
 // handleTraffic applies one journal batch exactly once: the batch must continue right after the
 // acknowledged sequence, and the new position is committed in the same transaction as the usage.
 func (s *Server) handleTraffic(stream pb.NodeLink_ConnectServer, nodeID int, b *pb.TrafficBatch) error {
-	if b.FromSeq == 0 || b.ToSeq < b.FromSeq || len(b.Entries) > maxTrafficEntries {
+	if b.FromSeq == 0 || b.ToSeq < b.FromSeq || len(b.Entries) > maxTrafficEntries || len(b.Conns) > maxConnEntries {
 		return status.Error(codes.InvalidArgument, "malformed traffic batch")
 	}
 	var n model.Node
@@ -212,7 +212,7 @@ func (s *Server) handleTraffic(stream pb.NodeLink_ConnectServer, nodeID int, b *
 		if res.RowsAffected != 1 {
 			return errStaleJournal
 		}
-		return nil
+		return storeUsage(tx, nodeID, emails, tags, b, time.Now())
 	})
 	switch {
 	case errors.Is(err, errStaleJournal):
@@ -239,11 +239,25 @@ func buildLimits(nodeID int) (*pb.LimitsSnapshot, error) {
 		names = append(names, e)
 	}
 	snap := &pb.LimitsSnapshot{TakenUnix: time.Now().Unix()}
+	deviceLimits := map[string]uint32{}
 	const chunk = 400
 	for i := 0; i < len(names); i += chunk {
 		var rows []xray.ClientTraffic
-		if err := database.GetDB().Where("email IN ?", names[i:min(i+chunk, len(names))]).Find(&rows).Error; err != nil {
+		part := names[i:min(i+chunk, len(names))]
+		if err := database.GetDB().Where("email IN ?", part).Find(&rows).Error; err != nil {
 			return nil, err
+		}
+		var devs []struct {
+			Email   string
+			LimitIP int `gorm:"column:limit_ip"`
+		}
+		if err := database.GetDB().Table("clients").Select("email, limit_ip").Where("email IN ?", part).Scan(&devs).Error; err != nil {
+			return nil, err
+		}
+		for _, d := range devs {
+			if d.LimitIP > 0 {
+				deviceLimits[d.Email] = uint32(d.LimitIP)
+			}
 		}
 		for _, r := range rows {
 			l := &pb.ClientLimit{Email: r.Email}
@@ -256,6 +270,7 @@ func buildLimits(nodeID int) (*pb.LimitsSnapshot, error) {
 			if r.ExpiryTime > 0 {
 				l.ExpiryUnix = r.ExpiryTime / 1000
 			}
+			l.DeviceLimit = deviceLimits[r.Email]
 			snap.Clients = append(snap.Clients, l)
 		}
 	}

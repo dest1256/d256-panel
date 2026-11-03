@@ -24,6 +24,7 @@ message NodeToPanel {
     XrayStatus xray_status = 4;
     StateAck state_ack = 5;
     TrafficBatch traffic = 6;
+    ActiveConnections active_connections = 7;
   }
 }
 
@@ -162,6 +163,8 @@ message TrafficBatch {
   // Wall-clock span the usage was measured in (unix seconds). Merged ranges cover the union.
   int64 start_unix = 4;
   int64 end_unix = 5;
+  // Per-destination usage of the same span, aggregated per hour; journaled and merged with the batch.
+  repeated ConnEntry conns = 6;
 }
 
 // JournalAck confirms everything up to and including acked_seq. When a batch does not follow the
@@ -179,6 +182,8 @@ message ClientLimit {
   uint64 used_bytes = 3;
   // Absolute expiry in unix seconds; 0 means none.
   int64 expiry_unix = 4;
+  // Maximum number of distinct source IPs connected at once; 0 means unlimited.
+  uint32 device_limit = 5;
 }
 
 // LimitsSnapshot replaces the node's previous snapshot. The panel sends it on connect and then
@@ -186,4 +191,44 @@ message ClientLimit {
 message LimitsSnapshot {
   int64 taken_unix = 1;
   repeated ClientLimit clients = 2;
+}
+
+// ConnEntry is the usage of one client towards one destination during one hour.
+message ConnEntry {
+  string email = 1;
+  string inbound_tag = 2;
+  // The sniffed domain when the core knows it, otherwise the destination IP.
+  string dest = 3;
+  string network = 4; // tcp | udp
+  int64 hour_unix = 5; // start of the hour
+  uint64 up = 6;
+  uint64 down = 7;
+  uint32 conns = 8;
+}
+
+message ActiveConn {
+  string email = 1;
+  string inbound_tag = 2;
+  string source_ip = 3;
+  string dest = 4;
+  uint32 port = 5;
+  string network = 6;
+  int64 start_unix = 7;
+  uint64 up = 8;
+  uint64 down = 9;
+}
+
+// ClientIp is a source address a client connected from recently (the device list).
+message ClientIp {
+  string email = 1;
+  string ip = 2;
+  int64 last_seen_unix = 3;
+}
+
+// ActiveConnections is a live snapshot, replaced each time; it is not journaled.
+message ActiveConnections {
+  repeated ActiveConn conns = 1;
+  repeated ClientIp ips = 2;
+  // True when the node had more connections than it sent.
+  bool truncated = 3;
 }

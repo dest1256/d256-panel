@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Divider, Modal, Popover, Tag, Tooltip, message } from 'antd';
 import {
+  BarChartOutlined,
   CopyOutlined,
   DownloadOutlined,
   EyeOutlined,
@@ -18,6 +19,7 @@ import type { ClientRecord, InboundOption } from '@/hooks/useClients';
 import { isPostQuantumLink } from '@/lib/xray/inbound-link';
 import { LinkTags, linkMetaText, parseLinkParts } from '@/lib/xray/link-label';
 import { QrPanel } from '@/pages/inbounds/qr';
+import ClientInsightsModal from './ClientInsightsModal';
 import ClientHwidListModal from '@/components/clients/ClientHwidList';
 import ConfigBlock from '@/components/clients/ConfigBlock';
 import {
@@ -261,6 +263,8 @@ export default function ClientInfoModal({
     if (clientIps.length === 0) void loadIps();
   }
 
+  const [insightsOpen, setInsightsOpen] = useState(false);
+
   function openHwidsModal() {
     setHwidsModalOpen(true);
     if (clientHwids.length === 0) void loadHwids();
@@ -282,6 +286,13 @@ export default function ClientInfoModal({
       >
         {client && (
           <>
+            <Button
+              icon={<BarChartOutlined aria-hidden />}
+              style={{ marginBottom: 12 }}
+              onClick={() => setInsightsOpen(true)}
+            >
+              {t('pages.clients.insights.open')}
+            </Button>
             <table className="info-table block">
               <tbody>
                 <tr>
@@ -855,6 +866,12 @@ export default function ClientInfoModal({
           <Tag>{t('tgbot.noIpRecord')}</Tag>
         )}
       </Modal>
+
+      <ClientInsightsModal
+        open={insightsOpen && !!client}
+        email={client?.email ?? ''}
+        onClose={() => setInsightsOpen(false)}
+      />
 
       <ClientHwidListModal
         open={hwidsModalOpen}
