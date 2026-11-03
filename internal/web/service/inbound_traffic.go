@@ -25,12 +25,19 @@ import (
 const depletedClientsClause = "reset = 0 and reset_day = 0 and reset_weekday = 0 and ((total > 0 and up + down >= total) or (expiry_time > 0 and expiry_time <= ?))"
 
 func (s *InboundService) AddTraffic(inboundTraffics []*xray.Traffic, clientTraffics []*xray.ClientTraffic) (needRestart bool, clientsDisabled bool, err error) {
+	return s.AddTrafficTx(inboundTraffics, clientTraffics, nil)
+}
+
+// AddTrafficTx is AddTraffic with an extra step that runs inside the same transaction as the
+// durable counters, so a caller can persist its own bookkeeping (such as a node journal position)
+// atomically with the usage it covers.
+func (s *InboundService) AddTrafficTx(inboundTraffics []*xray.Traffic, clientTraffics []*xray.ClientTraffic, inTx func(tx *gorm.DB) error) (needRestart bool, clientsDisabled bool, err error) {
 	var disabledNodeIDs []int
 	var remotePlans []trafficInboundUpdatePlan
 	var renewed []string
 	err = submitTrafficWrite(func() error {
 		var inner error
-		needRestart, clientsDisabled, disabledNodeIDs, remotePlans, renewed, inner = s.addTrafficLocked(inboundTraffics, clientTraffics)
+		needRestart, clientsDisabled, disabledNodeIDs, remotePlans, renewed, inner = s.addTrafficLocked(inboundTraffics, clientTraffics, inTx)
 		return inner
 	})
 	if err != nil {
@@ -45,7 +52,7 @@ func (s *InboundService) AddTraffic(inboundTraffics []*xray.Traffic, clientTraff
 	return
 }
 
-func (s *InboundService) addTrafficLocked(inboundTraffics []*xray.Traffic, clientTraffics []*xray.ClientTraffic) (bool, bool, []int, []trafficInboundUpdatePlan, []string, error) {
+func (s *InboundService) addTrafficLocked(inboundTraffics []*xray.Traffic, clientTraffics []*xray.ClientTraffic, inTx func(tx *gorm.DB) error) (bool, bool, []int, []trafficInboundUpdatePlan, []string, error) {
 	db := database.GetDB()
 	// Commit durable traffic before best-effort lifecycle maintenance so helper
 	// failures cannot discard usage already reported by Xray.
@@ -53,7 +60,13 @@ func (s *InboundService) addTrafficLocked(inboundTraffics []*xray.Traffic, clien
 		if err := s.addInboundTraffic(tx, inboundTraffics); err != nil {
 			return err
 		}
-		return s.addClientTraffic(tx, clientTraffics)
+		if err := s.addClientTraffic(tx, clientTraffics); err != nil {
+			return err
+		}
+		if inTx != nil {
+			return inTx(tx)
+		}
+		return nil
 	}); err != nil {
 		return false, false, nil, nil, nil, err
 	}

@@ -170,6 +170,12 @@ func RemoveIndex(s []any, index int) []any {
 
 // GetXrayConfig retrieves and builds the Xray configuration from settings and inbounds.
 func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
+	return s.buildXrayConfig(nil)
+}
+
+// buildXrayConfig renders the Xray config for the inbounds of one node. A nil nodeID selects the
+// legacy panel-local inbounds (removed together with the local Xray).
+func (s *XrayService) buildXrayConfig(nodeID *int) (*xray.Config, error) {
 	templateConfig, err := s.settingService.GetXrayConfigTemplate()
 	if err != nil {
 		return nil, err
@@ -208,7 +214,7 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 		if !inbound.Enable {
 			continue
 		}
-		if inbound.NodeID != nil {
+		if !sameNodeID(inbound.NodeID, nodeID) {
 			continue
 		}
 		if inbound.Protocol == model.MTProto || inbound.Protocol == model.AmneziaWG || inbound.Protocol == model.TUIC {
@@ -434,7 +440,7 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 	// balancer) is a valid rule target.
 	for i := range inbounds {
 		inbound := inbounds[i]
-		if inbound.Protocol != model.MTProto || !inbound.Enable || inbound.NodeID != nil {
+		if nodeID != nil || inbound.Protocol != model.MTProto || !inbound.Enable || inbound.NodeID != nil {
 			continue
 		}
 		injectMtprotoEgress(xrayConfig, inbound)
@@ -449,10 +455,12 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 	// hop. Whether it goes anywhere beyond Xray's default routing is up to
 	// whatever rules the admin adds through the stock Routing page, exactly
 	// like routing any other protocol.
-	injectAmneziawgnetSocks(xrayConfig, inbounds)
-	tuicInstances := configuredTuicInstances(inbounds)
-	if err := injectTuicRelay(xrayConfig, tuicInstances); err != nil {
-		return nil, err
+	if nodeID == nil {
+		injectAmneziawgnetSocks(xrayConfig, inbounds)
+		tuicInstances := configuredTuicInstances(inbounds)
+		if err := injectTuicRelay(xrayConfig, tuicInstances); err != nil {
+			return nil, err
+		}
 	}
 
 	// Restores each opted-in peer's own distinct public IPv6 source identity
@@ -463,6 +471,11 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 	// aliasing that address onto the host (see v6alias.go) so the kernel
 	// lets Xray bind an egress socket to it at all; this call only builds
 	// the Xray-side outbound/routing-rule half.
+	if nodeID != nil {
+		xrayConfig.RouterConfig = dropRefusedScript(xrayConfig.RouterConfig, "routing", routingScriptRefused)
+		xrayConfig.DNSConfig = dropRefusedScript(xrayConfig.DNSConfig, "dns", dnsScriptRefused)
+		return xrayConfig, nil
+	}
 	injectAmneziawgV6Egress(xrayConfig, inbounds)
 
 	// Wire the panel's own HTTP traffic through the configured outbound, after

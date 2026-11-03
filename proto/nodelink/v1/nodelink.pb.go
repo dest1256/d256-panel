@@ -77,6 +77,8 @@ type NodeToPanel struct {
 	//	*NodeToPanel_Heartbeat
 	//	*NodeToPanel_SystemMetrics
 	//	*NodeToPanel_XrayStatus
+	//	*NodeToPanel_StateAck
+	//	*NodeToPanel_Traffic
 	Msg           isNodeToPanel_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -155,6 +157,24 @@ func (x *NodeToPanel) GetXrayStatus() *XrayStatus {
 	return nil
 }
 
+func (x *NodeToPanel) GetStateAck() *StateAck {
+	if x != nil {
+		if x, ok := x.Msg.(*NodeToPanel_StateAck); ok {
+			return x.StateAck
+		}
+	}
+	return nil
+}
+
+func (x *NodeToPanel) GetTraffic() *TrafficBatch {
+	if x != nil {
+		if x, ok := x.Msg.(*NodeToPanel_Traffic); ok {
+			return x.Traffic
+		}
+	}
+	return nil
+}
+
 type isNodeToPanel_Msg interface {
 	isNodeToPanel_Msg()
 }
@@ -175,6 +195,14 @@ type NodeToPanel_XrayStatus struct {
 	XrayStatus *XrayStatus `protobuf:"bytes,4,opt,name=xray_status,json=xrayStatus,proto3,oneof"`
 }
 
+type NodeToPanel_StateAck struct {
+	StateAck *StateAck `protobuf:"bytes,5,opt,name=state_ack,json=stateAck,proto3,oneof"`
+}
+
+type NodeToPanel_Traffic struct {
+	Traffic *TrafficBatch `protobuf:"bytes,6,opt,name=traffic,proto3,oneof"`
+}
+
 func (*NodeToPanel_Hello) isNodeToPanel_Msg() {}
 
 func (*NodeToPanel_Heartbeat) isNodeToPanel_Msg() {}
@@ -183,12 +211,18 @@ func (*NodeToPanel_SystemMetrics) isNodeToPanel_Msg() {}
 
 func (*NodeToPanel_XrayStatus) isNodeToPanel_Msg() {}
 
+func (*NodeToPanel_StateAck) isNodeToPanel_Msg() {}
+
+func (*NodeToPanel_Traffic) isNodeToPanel_Msg() {}
+
 type PanelToNode struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Msg:
 	//
 	//	*PanelToNode_HelloAck
 	//	*PanelToNode_Heartbeat
+	//	*PanelToNode_DesiredState
+	//	*PanelToNode_JournalAck
 	Msg           isPanelToNode_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -249,6 +283,24 @@ func (x *PanelToNode) GetHeartbeat() *Heartbeat {
 	return nil
 }
 
+func (x *PanelToNode) GetDesiredState() *DesiredState {
+	if x != nil {
+		if x, ok := x.Msg.(*PanelToNode_DesiredState); ok {
+			return x.DesiredState
+		}
+	}
+	return nil
+}
+
+func (x *PanelToNode) GetJournalAck() *JournalAck {
+	if x != nil {
+		if x, ok := x.Msg.(*PanelToNode_JournalAck); ok {
+			return x.JournalAck
+		}
+	}
+	return nil
+}
+
 type isPanelToNode_Msg interface {
 	isPanelToNode_Msg()
 }
@@ -261,9 +313,21 @@ type PanelToNode_Heartbeat struct {
 	Heartbeat *Heartbeat `protobuf:"bytes,2,opt,name=heartbeat,proto3,oneof"`
 }
 
+type PanelToNode_DesiredState struct {
+	DesiredState *DesiredState `protobuf:"bytes,3,opt,name=desired_state,json=desiredState,proto3,oneof"`
+}
+
+type PanelToNode_JournalAck struct {
+	JournalAck *JournalAck `protobuf:"bytes,4,opt,name=journal_ack,json=journalAck,proto3,oneof"`
+}
+
 func (*PanelToNode_HelloAck) isPanelToNode_Msg() {}
 
 func (*PanelToNode_Heartbeat) isPanelToNode_Msg() {}
+
+func (*PanelToNode_DesiredState) isPanelToNode_Msg() {}
+
+func (*PanelToNode_JournalAck) isPanelToNode_Msg() {}
 
 type Hello struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
@@ -272,8 +336,13 @@ type Hello struct {
 	XrayVersion     string                 `protobuf:"bytes,3,opt,name=xray_version,json=xrayVersion,proto3" json:"xray_version,omitempty"`
 	Os              string                 `protobuf:"bytes,4,opt,name=os,proto3" json:"os,omitempty"`
 	Arch            string                 `protobuf:"bytes,5,opt,name=arch,proto3" json:"arch,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Identifies the node's sequence space. A new epoch (fresh node state) makes the panel forget its
+	// acknowledged position; a persisted journal keeps the epoch across restarts.
+	JournalEpoch uint64 `protobuf:"varint,6,opt,name=journal_epoch,json=journalEpoch,proto3" json:"journal_epoch,omitempty"`
+	// Version of the DesiredState the node currently runs (0 = none).
+	AppliedStateVersion uint64 `protobuf:"varint,7,opt,name=applied_state_version,json=appliedStateVersion,proto3" json:"applied_state_version,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *Hello) Reset() {
@@ -339,6 +408,20 @@ func (x *Hello) GetArch() string {
 		return x.Arch
 	}
 	return ""
+}
+
+func (x *Hello) GetJournalEpoch() uint64 {
+	if x != nil {
+		return x.JournalEpoch
+	}
+	return 0
+}
+
+func (x *Hello) GetAppliedStateVersion() uint64 {
+	if x != nil {
+		return x.AppliedStateVersion
+	}
+	return 0
 }
 
 type HelloAck struct {
@@ -703,28 +786,672 @@ func (x *XrayStatus) GetAppliedStateVersion() uint64 {
 	return 0
 }
 
+// DesiredState is everything the node must run. The panel is the only builder; the node applies it
+// atomically and answers with StateAck. A higher version always supersedes a lower one.
+type DesiredState struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Version uint64                 `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
+	// Complete Xray JSON configuration for this node. Always present: it is the fallback for hot_ops.
+	XrayConfigJson []byte `protobuf:"bytes,2,opt,name=xray_config_json,json=xrayConfigJson,proto3" json:"xray_config_json,omitempty"`
+	// When hot_ops_valid is set and the node currently runs base_version, the node may reach this
+	// state by applying hot_ops in order without restarting Xray. Any failure falls back to a restart
+	// with xray_config_json. hot_ops_valid with no ops means "nothing to apply at runtime".
+	BaseVersion   uint64   `protobuf:"varint,3,opt,name=base_version,json=baseVersion,proto3" json:"base_version,omitempty"`
+	HotOpsValid   bool     `protobuf:"varint,4,opt,name=hot_ops_valid,json=hotOpsValid,proto3" json:"hot_ops_valid,omitempty"`
+	HotOps        []*HotOp `protobuf:"bytes,5,rep,name=hot_ops,json=hotOps,proto3" json:"hot_ops,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DesiredState) Reset() {
+	*x = DesiredState{}
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DesiredState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DesiredState) ProtoMessage() {}
+
+func (x *DesiredState) ProtoReflect() protoreflect.Message {
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DesiredState.ProtoReflect.Descriptor instead.
+func (*DesiredState) Descriptor() ([]byte, []int) {
+	return file_nodelink_v1_nodelink_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *DesiredState) GetVersion() uint64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *DesiredState) GetXrayConfigJson() []byte {
+	if x != nil {
+		return x.XrayConfigJson
+	}
+	return nil
+}
+
+func (x *DesiredState) GetBaseVersion() uint64 {
+	if x != nil {
+		return x.BaseVersion
+	}
+	return 0
+}
+
+func (x *DesiredState) GetHotOpsValid() bool {
+	if x != nil {
+		return x.HotOpsValid
+	}
+	return false
+}
+
+func (x *DesiredState) GetHotOps() []*HotOp {
+	if x != nil {
+		return x.HotOps
+	}
+	return nil
+}
+
+type HotOp struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Op:
+	//
+	//	*HotOp_RemoveUser
+	//	*HotOp_AddUser
+	//	*HotOp_RemoveInbound
+	//	*HotOp_AddInbound
+	Op            isHotOp_Op `protobuf_oneof:"op"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HotOp) Reset() {
+	*x = HotOp{}
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HotOp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HotOp) ProtoMessage() {}
+
+func (x *HotOp) ProtoReflect() protoreflect.Message {
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HotOp.ProtoReflect.Descriptor instead.
+func (*HotOp) Descriptor() ([]byte, []int) {
+	return file_nodelink_v1_nodelink_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *HotOp) GetOp() isHotOp_Op {
+	if x != nil {
+		return x.Op
+	}
+	return nil
+}
+
+func (x *HotOp) GetRemoveUser() *RemoveUser {
+	if x != nil {
+		if x, ok := x.Op.(*HotOp_RemoveUser); ok {
+			return x.RemoveUser
+		}
+	}
+	return nil
+}
+
+func (x *HotOp) GetAddUser() *AddUser {
+	if x != nil {
+		if x, ok := x.Op.(*HotOp_AddUser); ok {
+			return x.AddUser
+		}
+	}
+	return nil
+}
+
+func (x *HotOp) GetRemoveInbound() *RemoveInbound {
+	if x != nil {
+		if x, ok := x.Op.(*HotOp_RemoveInbound); ok {
+			return x.RemoveInbound
+		}
+	}
+	return nil
+}
+
+func (x *HotOp) GetAddInbound() *AddInbound {
+	if x != nil {
+		if x, ok := x.Op.(*HotOp_AddInbound); ok {
+			return x.AddInbound
+		}
+	}
+	return nil
+}
+
+type isHotOp_Op interface {
+	isHotOp_Op()
+}
+
+type HotOp_RemoveUser struct {
+	RemoveUser *RemoveUser `protobuf:"bytes,1,opt,name=remove_user,json=removeUser,proto3,oneof"`
+}
+
+type HotOp_AddUser struct {
+	AddUser *AddUser `protobuf:"bytes,2,opt,name=add_user,json=addUser,proto3,oneof"`
+}
+
+type HotOp_RemoveInbound struct {
+	RemoveInbound *RemoveInbound `protobuf:"bytes,3,opt,name=remove_inbound,json=removeInbound,proto3,oneof"`
+}
+
+type HotOp_AddInbound struct {
+	AddInbound *AddInbound `protobuf:"bytes,4,opt,name=add_inbound,json=addInbound,proto3,oneof"`
+}
+
+func (*HotOp_RemoveUser) isHotOp_Op() {}
+
+func (*HotOp_AddUser) isHotOp_Op() {}
+
+func (*HotOp_RemoveInbound) isHotOp_Op() {}
+
+func (*HotOp_AddInbound) isHotOp_Op() {}
+
+type RemoveUser struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	InboundTag string                 `protobuf:"bytes,1,opt,name=inbound_tag,json=inboundTag,proto3" json:"inbound_tag,omitempty"`
+	Email      string                 `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
+	// A removal ahead of an add that may find nobody to remove; a missing user is not an error.
+	BestEffort    bool `protobuf:"varint,3,opt,name=best_effort,json=bestEffort,proto3" json:"best_effort,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemoveUser) Reset() {
+	*x = RemoveUser{}
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemoveUser) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveUser) ProtoMessage() {}
+
+func (x *RemoveUser) ProtoReflect() protoreflect.Message {
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveUser.ProtoReflect.Descriptor instead.
+func (*RemoveUser) Descriptor() ([]byte, []int) {
+	return file_nodelink_v1_nodelink_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *RemoveUser) GetInboundTag() string {
+	if x != nil {
+		return x.InboundTag
+	}
+	return ""
+}
+
+func (x *RemoveUser) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *RemoveUser) GetBestEffort() bool {
+	if x != nil {
+		return x.BestEffort
+	}
+	return false
+}
+
+type AddUser struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	InboundTag string                 `protobuf:"bytes,1,opt,name=inbound_tag,json=inboundTag,proto3" json:"inbound_tag,omitempty"`
+	// A marshalled xray protocol.User (email + typed account), built by the panel.
+	User          []byte `protobuf:"bytes,2,opt,name=user,proto3" json:"user,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddUser) Reset() {
+	*x = AddUser{}
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddUser) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddUser) ProtoMessage() {}
+
+func (x *AddUser) ProtoReflect() protoreflect.Message {
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddUser.ProtoReflect.Descriptor instead.
+func (*AddUser) Descriptor() ([]byte, []int) {
+	return file_nodelink_v1_nodelink_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *AddUser) GetInboundTag() string {
+	if x != nil {
+		return x.InboundTag
+	}
+	return ""
+}
+
+func (x *AddUser) GetUser() []byte {
+	if x != nil {
+		return x.User
+	}
+	return nil
+}
+
+type RemoveInbound struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	InboundTag    string                 `protobuf:"bytes,1,opt,name=inbound_tag,json=inboundTag,proto3" json:"inbound_tag,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemoveInbound) Reset() {
+	*x = RemoveInbound{}
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemoveInbound) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveInbound) ProtoMessage() {}
+
+func (x *RemoveInbound) ProtoReflect() protoreflect.Message {
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveInbound.ProtoReflect.Descriptor instead.
+func (*RemoveInbound) Descriptor() ([]byte, []int) {
+	return file_nodelink_v1_nodelink_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *RemoveInbound) GetInboundTag() string {
+	if x != nil {
+		return x.InboundTag
+	}
+	return ""
+}
+
+type AddInbound struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// One inbound in Xray JSON form.
+	InboundJson   []byte `protobuf:"bytes,1,opt,name=inbound_json,json=inboundJson,proto3" json:"inbound_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddInbound) Reset() {
+	*x = AddInbound{}
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddInbound) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddInbound) ProtoMessage() {}
+
+func (x *AddInbound) ProtoReflect() protoreflect.Message {
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddInbound.ProtoReflect.Descriptor instead.
+func (*AddInbound) Descriptor() ([]byte, []int) {
+	return file_nodelink_v1_nodelink_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *AddInbound) GetInboundJson() []byte {
+	if x != nil {
+		return x.InboundJson
+	}
+	return nil
+}
+
+type StateAck struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Version       uint64                 `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
+	Ok            bool                   `protobuf:"varint,2,opt,name=ok,proto3" json:"ok,omitempty"`
+	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StateAck) Reset() {
+	*x = StateAck{}
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StateAck) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StateAck) ProtoMessage() {}
+
+func (x *StateAck) ProtoReflect() protoreflect.Message {
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StateAck.ProtoReflect.Descriptor instead.
+func (*StateAck) Descriptor() ([]byte, []int) {
+	return file_nodelink_v1_nodelink_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *StateAck) GetVersion() uint64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *StateAck) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *StateAck) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+// One accounting entry: bytes moved since the previous batch for a user (by email) or an inbound (by tag).
+type TrafficEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Inbound       bool                   `protobuf:"varint,1,opt,name=inbound,proto3" json:"inbound,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Up            uint64                 `protobuf:"varint,3,opt,name=up,proto3" json:"up,omitempty"`
+	Down          uint64                 `protobuf:"varint,4,opt,name=down,proto3" json:"down,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TrafficEntry) Reset() {
+	*x = TrafficEntry{}
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrafficEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrafficEntry) ProtoMessage() {}
+
+func (x *TrafficEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrafficEntry.ProtoReflect.Descriptor instead.
+func (*TrafficEntry) Descriptor() ([]byte, []int) {
+	return file_nodelink_v1_nodelink_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *TrafficEntry) GetInbound() bool {
+	if x != nil {
+		return x.Inbound
+	}
+	return false
+}
+
+func (x *TrafficEntry) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *TrafficEntry) GetUp() uint64 {
+	if x != nil {
+		return x.Up
+	}
+	return 0
+}
+
+func (x *TrafficEntry) GetDown() uint64 {
+	if x != nil {
+		return x.Down
+	}
+	return 0
+}
+
+// TrafficBatch carries deltas for the sequence range [from_seq, to_seq]. The panel applies a batch
+// only when from_seq == acked_seq+1, in one transaction with the new acked_seq, so retries never
+// count twice.
+type TrafficBatch struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FromSeq       uint64                 `protobuf:"varint,1,opt,name=from_seq,json=fromSeq,proto3" json:"from_seq,omitempty"`
+	ToSeq         uint64                 `protobuf:"varint,2,opt,name=to_seq,json=toSeq,proto3" json:"to_seq,omitempty"`
+	Entries       []*TrafficEntry        `protobuf:"bytes,3,rep,name=entries,proto3" json:"entries,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TrafficBatch) Reset() {
+	*x = TrafficBatch{}
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrafficBatch) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrafficBatch) ProtoMessage() {}
+
+func (x *TrafficBatch) ProtoReflect() protoreflect.Message {
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrafficBatch.ProtoReflect.Descriptor instead.
+func (*TrafficBatch) Descriptor() ([]byte, []int) {
+	return file_nodelink_v1_nodelink_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *TrafficBatch) GetFromSeq() uint64 {
+	if x != nil {
+		return x.FromSeq
+	}
+	return 0
+}
+
+func (x *TrafficBatch) GetToSeq() uint64 {
+	if x != nil {
+		return x.ToSeq
+	}
+	return 0
+}
+
+func (x *TrafficBatch) GetEntries() []*TrafficEntry {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
+// JournalAck confirms everything up to and including acked_seq. When a batch does not follow the
+// acknowledged position, the panel answers with the current acked_seq so the node resends from there.
+type JournalAck struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AckedSeq      uint64                 `protobuf:"varint,1,opt,name=acked_seq,json=ackedSeq,proto3" json:"acked_seq,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *JournalAck) Reset() {
+	*x = JournalAck{}
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *JournalAck) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*JournalAck) ProtoMessage() {}
+
+func (x *JournalAck) ProtoReflect() protoreflect.Message {
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use JournalAck.ProtoReflect.Descriptor instead.
+func (*JournalAck) Descriptor() ([]byte, []int) {
+	return file_nodelink_v1_nodelink_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *JournalAck) GetAckedSeq() uint64 {
+	if x != nil {
+		return x.AckedSeq
+	}
+	return 0
+}
+
 var File_nodelink_v1_nodelink_proto protoreflect.FileDescriptor
 
 const file_nodelink_v1_nodelink_proto_rawDesc = "" +
 	"\n" +
-	"\x1anodelink/v1/nodelink.proto\x12\x10d256.nodelink.v1\"\x8d\x02\n" +
+	"\x1anodelink/v1/nodelink.proto\x12\x10d256.nodelink.v1\"\x84\x03\n" +
 	"\vNodeToPanel\x12/\n" +
 	"\x05hello\x18\x01 \x01(\v2\x17.d256.nodelink.v1.HelloH\x00R\x05hello\x12;\n" +
 	"\theartbeat\x18\x02 \x01(\v2\x1b.d256.nodelink.v1.HeartbeatH\x00R\theartbeat\x12H\n" +
 	"\x0esystem_metrics\x18\x03 \x01(\v2\x1f.d256.nodelink.v1.SystemMetricsH\x00R\rsystemMetrics\x12?\n" +
 	"\vxray_status\x18\x04 \x01(\v2\x1c.d256.nodelink.v1.XrayStatusH\x00R\n" +
-	"xrayStatusB\x05\n" +
-	"\x03msg\"\x8c\x01\n" +
+	"xrayStatus\x129\n" +
+	"\tstate_ack\x18\x05 \x01(\v2\x1a.d256.nodelink.v1.StateAckH\x00R\bstateAck\x12:\n" +
+	"\atraffic\x18\x06 \x01(\v2\x1e.d256.nodelink.v1.TrafficBatchH\x00R\atrafficB\x05\n" +
+	"\x03msg\"\x94\x02\n" +
 	"\vPanelToNode\x129\n" +
 	"\thello_ack\x18\x01 \x01(\v2\x1a.d256.nodelink.v1.HelloAckH\x00R\bhelloAck\x12;\n" +
-	"\theartbeat\x18\x02 \x01(\v2\x1b.d256.nodelink.v1.HeartbeatH\x00R\theartbeatB\x05\n" +
-	"\x03msg\"\x9c\x01\n" +
+	"\theartbeat\x18\x02 \x01(\v2\x1b.d256.nodelink.v1.HeartbeatH\x00R\theartbeat\x12E\n" +
+	"\rdesired_state\x18\x03 \x01(\v2\x1e.d256.nodelink.v1.DesiredStateH\x00R\fdesiredState\x12?\n" +
+	"\vjournal_ack\x18\x04 \x01(\v2\x1c.d256.nodelink.v1.JournalAckH\x00R\n" +
+	"journalAckB\x05\n" +
+	"\x03msg\"\xf5\x01\n" +
 	"\x05Hello\x12)\n" +
 	"\x10protocol_version\x18\x01 \x01(\rR\x0fprotocolVersion\x12!\n" +
 	"\fnode_version\x18\x02 \x01(\tR\vnodeVersion\x12!\n" +
 	"\fxray_version\x18\x03 \x01(\tR\vxrayVersion\x12\x0e\n" +
 	"\x02os\x18\x04 \x01(\tR\x02os\x12\x12\n" +
-	"\x04arch\x18\x05 \x01(\tR\x04arch\"p\n" +
+	"\x04arch\x18\x05 \x01(\tR\x04arch\x12#\n" +
+	"\rjournal_epoch\x18\x06 \x01(\x04R\fjournalEpoch\x122\n" +
+	"\x15applied_state_version\x18\a \x01(\x04R\x13appliedStateVersion\"p\n" +
 	"\bHelloAck\x12\x1a\n" +
 	"\baccepted\x18\x01 \x01(\bR\baccepted\x120\n" +
 	"\x14min_protocol_version\x18\x02 \x01(\rR\x12minProtocolVersion\x12\x16\n" +
@@ -765,7 +1492,54 @@ const file_nodelink_v1_nodelink_proto_rawDesc = "" +
 	"\x05state\x18\x01 \x01(\tR\x05state\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12\x18\n" +
 	"\aversion\x18\x03 \x01(\tR\aversion\x122\n" +
-	"\x15applied_state_version\x18\x04 \x01(\x04R\x13appliedStateVersion*K\n" +
+	"\x15applied_state_version\x18\x04 \x01(\x04R\x13appliedStateVersion\"\xcb\x01\n" +
+	"\fDesiredState\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\x04R\aversion\x12(\n" +
+	"\x10xray_config_json\x18\x02 \x01(\fR\x0exrayConfigJson\x12!\n" +
+	"\fbase_version\x18\x03 \x01(\x04R\vbaseVersion\x12\"\n" +
+	"\rhot_ops_valid\x18\x04 \x01(\bR\vhotOpsValid\x120\n" +
+	"\ahot_ops\x18\x05 \x03(\v2\x17.d256.nodelink.v1.HotOpR\x06hotOps\"\x91\x02\n" +
+	"\x05HotOp\x12?\n" +
+	"\vremove_user\x18\x01 \x01(\v2\x1c.d256.nodelink.v1.RemoveUserH\x00R\n" +
+	"removeUser\x126\n" +
+	"\badd_user\x18\x02 \x01(\v2\x19.d256.nodelink.v1.AddUserH\x00R\aaddUser\x12H\n" +
+	"\x0eremove_inbound\x18\x03 \x01(\v2\x1f.d256.nodelink.v1.RemoveInboundH\x00R\rremoveInbound\x12?\n" +
+	"\vadd_inbound\x18\x04 \x01(\v2\x1c.d256.nodelink.v1.AddInboundH\x00R\n" +
+	"addInboundB\x04\n" +
+	"\x02op\"d\n" +
+	"\n" +
+	"RemoveUser\x12\x1f\n" +
+	"\vinbound_tag\x18\x01 \x01(\tR\n" +
+	"inboundTag\x12\x14\n" +
+	"\x05email\x18\x02 \x01(\tR\x05email\x12\x1f\n" +
+	"\vbest_effort\x18\x03 \x01(\bR\n" +
+	"bestEffort\">\n" +
+	"\aAddUser\x12\x1f\n" +
+	"\vinbound_tag\x18\x01 \x01(\tR\n" +
+	"inboundTag\x12\x12\n" +
+	"\x04user\x18\x02 \x01(\fR\x04user\"0\n" +
+	"\rRemoveInbound\x12\x1f\n" +
+	"\vinbound_tag\x18\x01 \x01(\tR\n" +
+	"inboundTag\"/\n" +
+	"\n" +
+	"AddInbound\x12!\n" +
+	"\finbound_json\x18\x01 \x01(\fR\vinboundJson\"J\n" +
+	"\bStateAck\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\x04R\aversion\x12\x0e\n" +
+	"\x02ok\x18\x02 \x01(\bR\x02ok\x12\x14\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\"`\n" +
+	"\fTrafficEntry\x12\x18\n" +
+	"\ainbound\x18\x01 \x01(\bR\ainbound\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x0e\n" +
+	"\x02up\x18\x03 \x01(\x04R\x02up\x12\x12\n" +
+	"\x04down\x18\x04 \x01(\x04R\x04down\"z\n" +
+	"\fTrafficBatch\x12\x19\n" +
+	"\bfrom_seq\x18\x01 \x01(\x04R\afromSeq\x12\x15\n" +
+	"\x06to_seq\x18\x02 \x01(\x04R\x05toSeq\x128\n" +
+	"\aentries\x18\x03 \x03(\v2\x1e.d256.nodelink.v1.TrafficEntryR\aentries\")\n" +
+	"\n" +
+	"JournalAck\x12\x1b\n" +
+	"\tacked_seq\x18\x01 \x01(\x04R\backedSeq*K\n" +
 	"\x0fProtocolVersion\x12 \n" +
 	"\x1cPROTOCOL_VERSION_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12PROTOCOL_VERSION_1\x10\x012W\n" +
@@ -785,7 +1559,7 @@ func file_nodelink_v1_nodelink_proto_rawDescGZIP() []byte {
 }
 
 var file_nodelink_v1_nodelink_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_nodelink_v1_nodelink_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_nodelink_v1_nodelink_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_nodelink_v1_nodelink_proto_goTypes = []any{
 	(ProtocolVersion)(0),  // 0: d256.nodelink.v1.ProtocolVersion
 	(*NodeToPanel)(nil),   // 1: d256.nodelink.v1.NodeToPanel
@@ -795,21 +1569,41 @@ var file_nodelink_v1_nodelink_proto_goTypes = []any{
 	(*Heartbeat)(nil),     // 5: d256.nodelink.v1.Heartbeat
 	(*SystemMetrics)(nil), // 6: d256.nodelink.v1.SystemMetrics
 	(*XrayStatus)(nil),    // 7: d256.nodelink.v1.XrayStatus
+	(*DesiredState)(nil),  // 8: d256.nodelink.v1.DesiredState
+	(*HotOp)(nil),         // 9: d256.nodelink.v1.HotOp
+	(*RemoveUser)(nil),    // 10: d256.nodelink.v1.RemoveUser
+	(*AddUser)(nil),       // 11: d256.nodelink.v1.AddUser
+	(*RemoveInbound)(nil), // 12: d256.nodelink.v1.RemoveInbound
+	(*AddInbound)(nil),    // 13: d256.nodelink.v1.AddInbound
+	(*StateAck)(nil),      // 14: d256.nodelink.v1.StateAck
+	(*TrafficEntry)(nil),  // 15: d256.nodelink.v1.TrafficEntry
+	(*TrafficBatch)(nil),  // 16: d256.nodelink.v1.TrafficBatch
+	(*JournalAck)(nil),    // 17: d256.nodelink.v1.JournalAck
 }
 var file_nodelink_v1_nodelink_proto_depIdxs = []int32{
-	3, // 0: d256.nodelink.v1.NodeToPanel.hello:type_name -> d256.nodelink.v1.Hello
-	5, // 1: d256.nodelink.v1.NodeToPanel.heartbeat:type_name -> d256.nodelink.v1.Heartbeat
-	6, // 2: d256.nodelink.v1.NodeToPanel.system_metrics:type_name -> d256.nodelink.v1.SystemMetrics
-	7, // 3: d256.nodelink.v1.NodeToPanel.xray_status:type_name -> d256.nodelink.v1.XrayStatus
-	4, // 4: d256.nodelink.v1.PanelToNode.hello_ack:type_name -> d256.nodelink.v1.HelloAck
-	5, // 5: d256.nodelink.v1.PanelToNode.heartbeat:type_name -> d256.nodelink.v1.Heartbeat
-	1, // 6: d256.nodelink.v1.NodeLink.Connect:input_type -> d256.nodelink.v1.NodeToPanel
-	2, // 7: d256.nodelink.v1.NodeLink.Connect:output_type -> d256.nodelink.v1.PanelToNode
-	7, // [7:8] is the sub-list for method output_type
-	6, // [6:7] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	3,  // 0: d256.nodelink.v1.NodeToPanel.hello:type_name -> d256.nodelink.v1.Hello
+	5,  // 1: d256.nodelink.v1.NodeToPanel.heartbeat:type_name -> d256.nodelink.v1.Heartbeat
+	6,  // 2: d256.nodelink.v1.NodeToPanel.system_metrics:type_name -> d256.nodelink.v1.SystemMetrics
+	7,  // 3: d256.nodelink.v1.NodeToPanel.xray_status:type_name -> d256.nodelink.v1.XrayStatus
+	14, // 4: d256.nodelink.v1.NodeToPanel.state_ack:type_name -> d256.nodelink.v1.StateAck
+	16, // 5: d256.nodelink.v1.NodeToPanel.traffic:type_name -> d256.nodelink.v1.TrafficBatch
+	4,  // 6: d256.nodelink.v1.PanelToNode.hello_ack:type_name -> d256.nodelink.v1.HelloAck
+	5,  // 7: d256.nodelink.v1.PanelToNode.heartbeat:type_name -> d256.nodelink.v1.Heartbeat
+	8,  // 8: d256.nodelink.v1.PanelToNode.desired_state:type_name -> d256.nodelink.v1.DesiredState
+	17, // 9: d256.nodelink.v1.PanelToNode.journal_ack:type_name -> d256.nodelink.v1.JournalAck
+	9,  // 10: d256.nodelink.v1.DesiredState.hot_ops:type_name -> d256.nodelink.v1.HotOp
+	10, // 11: d256.nodelink.v1.HotOp.remove_user:type_name -> d256.nodelink.v1.RemoveUser
+	11, // 12: d256.nodelink.v1.HotOp.add_user:type_name -> d256.nodelink.v1.AddUser
+	12, // 13: d256.nodelink.v1.HotOp.remove_inbound:type_name -> d256.nodelink.v1.RemoveInbound
+	13, // 14: d256.nodelink.v1.HotOp.add_inbound:type_name -> d256.nodelink.v1.AddInbound
+	15, // 15: d256.nodelink.v1.TrafficBatch.entries:type_name -> d256.nodelink.v1.TrafficEntry
+	1,  // 16: d256.nodelink.v1.NodeLink.Connect:input_type -> d256.nodelink.v1.NodeToPanel
+	2,  // 17: d256.nodelink.v1.NodeLink.Connect:output_type -> d256.nodelink.v1.PanelToNode
+	17, // [17:18] is the sub-list for method output_type
+	16, // [16:17] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_nodelink_v1_nodelink_proto_init() }
@@ -822,10 +1616,20 @@ func file_nodelink_v1_nodelink_proto_init() {
 		(*NodeToPanel_Heartbeat)(nil),
 		(*NodeToPanel_SystemMetrics)(nil),
 		(*NodeToPanel_XrayStatus)(nil),
+		(*NodeToPanel_StateAck)(nil),
+		(*NodeToPanel_Traffic)(nil),
 	}
 	file_nodelink_v1_nodelink_proto_msgTypes[1].OneofWrappers = []any{
 		(*PanelToNode_HelloAck)(nil),
 		(*PanelToNode_Heartbeat)(nil),
+		(*PanelToNode_DesiredState)(nil),
+		(*PanelToNode_JournalAck)(nil),
+	}
+	file_nodelink_v1_nodelink_proto_msgTypes[8].OneofWrappers = []any{
+		(*HotOp_RemoveUser)(nil),
+		(*HotOp_AddUser)(nil),
+		(*HotOp_RemoveInbound)(nil),
+		(*HotOp_AddInbound)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -833,7 +1637,7 @@ func file_nodelink_v1_nodelink_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nodelink_v1_nodelink_proto_rawDesc), len(file_nodelink_v1_nodelink_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   7,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

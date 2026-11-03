@@ -22,6 +22,8 @@ message NodeToPanel {
     Heartbeat heartbeat = 2;
     SystemMetrics system_metrics = 3;
     XrayStatus xray_status = 4;
+    StateAck state_ack = 5;
+    TrafficBatch traffic = 6;
   }
 }
 
@@ -29,6 +31,8 @@ message PanelToNode {
   oneof msg {
     HelloAck hello_ack = 1;
     Heartbeat heartbeat = 2;
+    DesiredState desired_state = 3;
+    JournalAck journal_ack = 4;
   }
 }
 
@@ -38,6 +42,11 @@ message Hello {
   string xray_version = 3;
   string os = 4;
   string arch = 5;
+  // Identifies the node's sequence space. A new epoch (fresh node state) makes the panel forget its
+  // acknowledged position; a persisted journal keeps the epoch across restarts.
+  uint64 journal_epoch = 6;
+  // Version of the DesiredState the node currently runs (0 = none).
+  uint64 applied_state_version = 7;
 }
 
 message HelloAck {
@@ -79,4 +88,78 @@ message XrayStatus {
   string error = 2;
   string version = 3;
   uint64 applied_state_version = 4;
+}
+
+// DesiredState is everything the node must run. The panel is the only builder; the node applies it
+// atomically and answers with StateAck. A higher version always supersedes a lower one.
+message DesiredState {
+  uint64 version = 1;
+  // Complete Xray JSON configuration for this node. Always present: it is the fallback for hot_ops.
+  bytes xray_config_json = 2;
+  // When hot_ops_valid is set and the node currently runs base_version, the node may reach this
+  // state by applying hot_ops in order without restarting Xray. Any failure falls back to a restart
+  // with xray_config_json. hot_ops_valid with no ops means "nothing to apply at runtime".
+  uint64 base_version = 3;
+  bool hot_ops_valid = 4;
+  repeated HotOp hot_ops = 5;
+}
+
+message HotOp {
+  oneof op {
+    RemoveUser remove_user = 1;
+    AddUser add_user = 2;
+    RemoveInbound remove_inbound = 3;
+    AddInbound add_inbound = 4;
+  }
+}
+
+message RemoveUser {
+  string inbound_tag = 1;
+  string email = 2;
+  // A removal ahead of an add that may find nobody to remove; a missing user is not an error.
+  bool best_effort = 3;
+}
+
+message AddUser {
+  string inbound_tag = 1;
+  // A marshalled xray protocol.User (email + typed account), built by the panel.
+  bytes user = 2;
+}
+
+message RemoveInbound {
+  string inbound_tag = 1;
+}
+
+message AddInbound {
+  // One inbound in Xray JSON form.
+  bytes inbound_json = 1;
+}
+
+message StateAck {
+  uint64 version = 1;
+  bool ok = 2;
+  string error = 3;
+}
+
+// One accounting entry: bytes moved since the previous batch for a user (by email) or an inbound (by tag).
+message TrafficEntry {
+  bool inbound = 1;
+  string name = 2;
+  uint64 up = 3;
+  uint64 down = 4;
+}
+
+// TrafficBatch carries deltas for the sequence range [from_seq, to_seq]. The panel applies a batch
+// only when from_seq == acked_seq+1, in one transaction with the new acked_seq, so retries never
+// count twice.
+message TrafficBatch {
+  uint64 from_seq = 1;
+  uint64 to_seq = 2;
+  repeated TrafficEntry entries = 3;
+}
+
+// JournalAck confirms everything up to and including acked_seq. When a batch does not follow the
+// acknowledged position, the panel answers with the current acked_seq so the node resends from there.
+message JournalAck {
+  uint64 acked_seq = 1;
 }

@@ -33,6 +33,8 @@ const (
 	// idleTimeout: a node that sends nothing (heartbeats are every 5s) for this long is dropped.
 	idleTimeout     = 20 * time.Second
 	revalidateEvery = 30 * time.Second
+	// pushEvery is how often the desired state is recomputed; a changed config is sent at once.
+	pushEvery = 2 * time.Second
 )
 
 // Snapshot is the latest live state of a connected (or recently seen) node.
@@ -133,11 +135,13 @@ func (h *Hub) Forget(id int) {
 // Server is the node gRPC endpoint.
 type Server struct {
 	pb.UnimplementedNodeLinkServer
-	svc  *Service
-	hub  *Hub
-	node service.NodeService
-	gs   *grpc.Server
-	lis  net.Listener
+	svc     *Service
+	hub     *Hub
+	node    service.NodeService
+	xray    service.XrayService
+	inbound service.InboundService
+	gs      *grpc.Server
+	lis     net.Listener
 }
 
 // NewServer prepares the server; call Start to listen.
@@ -287,6 +291,13 @@ func (s *Server) Connect(stream pb.NodeLink_ConnectServer) error {
 	}}}); err != nil {
 		return err
 	}
+	acked, err := s.syncJournalEpoch(node.Id, hello.JournalEpoch)
+	if err != nil {
+		return status.Error(codes.Internal, "journal position")
+	}
+	if err := stream.Send(&pb.PanelToNode{Msg: &pb.PanelToNode_JournalAck{JournalAck: &pb.JournalAck{AckedSeq: acked}}}); err != nil {
+		return err
+	}
 	database.GetDB().Model(&model.Node{}).Where("id = ?", node.Id).Updates(map[string]any{
 		"proto_version": int(hello.ProtocolVersion),
 		"node_version":  truncate(hello.NodeVersion, 64),
@@ -308,6 +319,12 @@ func (s *Server) Connect(stream pb.NodeLink_ConnectServer) error {
 		}
 	}()
 
+	st := &sessState{}
+	if err := s.syncDesired(stream, node.Id, st, true); err != nil {
+		return err
+	}
+	push := time.NewTicker(pushEvery)
+	defer push.Stop()
 	idle := time.NewTimer(idleTimeout)
 	defer idle.Stop()
 	recheck := time.NewTicker(revalidateEvery)
@@ -325,7 +342,11 @@ func (s *Server) Connect(stream pb.NodeLink_ConnectServer) error {
 				}
 			}
 			idle.Reset(idleTimeout)
-			if err := s.handle(stream, node, r.msg); err != nil {
+			if err := s.handle(stream, node, st, r.msg); err != nil {
+				return err
+			}
+		case <-push.C:
+			if err := s.syncDesired(stream, node.Id, st, false); err != nil {
 				return err
 			}
 		case <-idle.C:
@@ -346,7 +367,7 @@ func (s *Server) markStatus(id int, st, lastErr string) {
 	})
 }
 
-func (s *Server) handle(stream pb.NodeLink_ConnectServer, node *model.Node, m *pb.NodeToPanel) error {
+func (s *Server) handle(stream pb.NodeLink_ConnectServer, node *model.Node, st *sessState, m *pb.NodeToPanel) error {
 	switch x := m.Msg.(type) {
 	case *pb.NodeToPanel_Heartbeat:
 		s.hub.update(node.Id, func(sn *Snapshot) { sn.LatencyMs = x.Heartbeat.LastRttMs })
@@ -355,6 +376,11 @@ func (s *Server) handle(stream pb.NodeLink_ConnectServer, node *model.Node, m *p
 		s.recordMetrics(node.Id, x.SystemMetrics)
 	case *pb.NodeToPanel_XrayStatus:
 		s.hub.update(node.Id, func(sn *Snapshot) { sn.Xray = x.XrayStatus })
+	case *pb.NodeToPanel_StateAck:
+		s.recordStateAck(node.Id, x.StateAck)
+		st.onAck(x.StateAck.Version, x.StateAck.Ok)
+	case *pb.NodeToPanel_Traffic:
+		return s.handleTraffic(stream, node.Id, x.Traffic)
 	case *pb.NodeToPanel_Hello:
 		return status.Error(codes.InvalidArgument, "unexpected hello")
 	default:

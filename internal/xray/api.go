@@ -42,6 +42,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 // Compiled once at package load: GetTraffic runs on every traffic-stats tick,
@@ -1034,4 +1035,19 @@ func mapToSlice[T any](m map[string]*T) []*T {
 		result = append(result, v)
 	}
 	return result
+}
+
+// BuildUserProto marshals the protocol.User an AddUserOperation carries for op. ok is false for
+// protocols that cannot be altered live, which callers treat as "restart instead".
+func BuildUserProto(op UserOp) (raw []byte, ok bool, err error) {
+	email, err := getRequiredUserString(op.User, "email")
+	if err != nil {
+		return nil, false, err
+	}
+	account, err := buildUserAccount(op.Protocol, op.User)
+	if err != nil || account == nil {
+		return nil, false, err
+	}
+	raw, err = proto.Marshal(&protocol.User{Email: email, Account: account})
+	return raw, err == nil, err
 }

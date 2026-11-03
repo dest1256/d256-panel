@@ -851,6 +851,14 @@ type Node struct {
 	EnrolledAt   int64  `json:"enrolledAt" gorm:"column:enrolled_at"`
 	ProtoVersion int    `json:"protoVersion" gorm:"column:proto_version"`
 	NodeVersion  string `json:"nodeVersion" gorm:"column:node_version"`
+	// Desired-state delivery: version/hash of the last config built for this node, the version the node
+	// confirmed, and the accounting position (epoch + acknowledged sequence) of its traffic journal.
+	DesiredVersion  uint64 `json:"desiredVersion" gorm:"column:desired_version"`
+	DesiredHash     string `json:"-" gorm:"column:desired_hash"`
+	AppliedVersion  uint64 `json:"appliedVersion" gorm:"column:applied_version"`
+	ApplyError      string `json:"applyError" gorm:"column:apply_error"`
+	JournalEpoch    uint64 `json:"-" gorm:"column:journal_epoch"`
+	JournalAckedSeq uint64 `json:"-" gorm:"column:journal_acked_seq"`
 
 	// Guid is the remote panel's stable self-identifier (its panelGuid),
 	// learned from each heartbeat. It is the globally stable node identity used

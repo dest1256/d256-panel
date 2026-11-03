@@ -230,7 +230,7 @@ func TestLinkSession(t *testing.T) {
 	}
 	now := time.Now().UnixNano()
 	_ = st.Send(&pb.NodeToPanel{Msg: &pb.NodeToPanel_Heartbeat{Heartbeat: &pb.Heartbeat{UnixNanos: now, LastRttMs: 12}}})
-	echo, err := st.Recv()
+	echo, err := recvUntil(st, func(m *pb.PanelToNode) bool { return m.GetHeartbeat() != nil })
 	if err != nil || echo.GetHeartbeat().GetUnixNanos() != now {
 		t.Fatalf("heartbeat echo: %v %v", echo, err)
 	}
@@ -354,5 +354,15 @@ func TestLinkRejectsOversizedMessage(t *testing.T) {
 	_ = st.Send(big)
 	if _, err := st.Recv(); err == nil {
 		t.Fatal("oversized message must terminate the stream")
+	}
+}
+
+// recvUntil reads until a message satisfies pred (the panel also sends journal acks and desired state).
+func recvUntil(st pb.NodeLink_ConnectClient, pred func(*pb.PanelToNode) bool) (*pb.PanelToNode, error) {
+	for {
+		m, err := st.Recv()
+		if err != nil || pred(m) {
+			return m, err
+		}
 	}
 }
