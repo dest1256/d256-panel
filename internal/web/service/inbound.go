@@ -328,21 +328,21 @@ func (s *InboundService) annotateFallbackParents(db *gorm.DB, inbounds []*model.
 }
 
 type InboundOption struct {
-	Id             int    `json:"id" example:"1"`
-	Remark         string `json:"remark" example:"VLESS-443"`
-	Tag            string `json:"tag" example:"in-443-tcp"`
-	Protocol       string `json:"protocol" example:"vless"`
-	Port           int    `json:"port" example:"443"`
-	Enable         bool   `json:"enable" example:"true"`
-	Network        string `json:"network,omitempty"`
-	Security       string `json:"security,omitempty"`
-	TlsFlowCapable bool   `json:"tlsFlowCapable" example:"true"`
-	SsMethod       string `json:"ssMethod"`
-	WgPublicKey    string `json:"wgPublicKey,omitempty"`
-	WgMtu          int    `json:"wgMtu,omitempty"`
-	WgDns          string `json:"wgDns,omitempty"`
-	MtprotoDomain  string `json:"mtprotoDomain,omitempty"`
-	TuicServer *tuic.TuicServerSettings `json:"tuicServer,omitempty"`
+	Id             int                      `json:"id" example:"1"`
+	Remark         string                   `json:"remark" example:"VLESS-443"`
+	Tag            string                   `json:"tag" example:"in-443-tcp"`
+	Protocol       string                   `json:"protocol" example:"vless"`
+	Port           int                      `json:"port" example:"443"`
+	Enable         bool                     `json:"enable" example:"true"`
+	Network        string                   `json:"network,omitempty"`
+	Security       string                   `json:"security,omitempty"`
+	TlsFlowCapable bool                     `json:"tlsFlowCapable" example:"true"`
+	SsMethod       string                   `json:"ssMethod"`
+	WgPublicKey    string                   `json:"wgPublicKey,omitempty"`
+	WgMtu          int                      `json:"wgMtu,omitempty"`
+	WgDns          string                   `json:"wgDns,omitempty"`
+	MtprotoDomain  string                   `json:"mtprotoDomain,omitempty"`
+	TuicServer     *tuic.TuicServerSettings `json:"tuicServer,omitempty"`
 	// Hosting node; nil for this panel's own inbounds. Lets the clients
 	// page map a node filter onto inbound IDs (#4997).
 	NodeId *int `json:"nodeId,omitempty"`
@@ -1140,31 +1140,6 @@ func mtprotoRoutesThroughXray(inbound *model.Inbound) bool {
 		return false
 	}
 	return parsed.RouteThroughXray
-}
-
-func settingsRouteXrayPort(parsed map[string]any) int {
-	switch v := parsed["routeXrayPort"].(type) {
-	case float64:
-		return int(v)
-	case int:
-		return v
-	case json.Number:
-		if n, err := v.Int64(); err == nil {
-			return int(n)
-		}
-	}
-	return 0
-}
-
-func parseRouteXrayPort(settings string) int {
-	if settings == "" {
-		return 0
-	}
-	var parsed map[string]any
-	if err := json.Unmarshal([]byte(settings), &parsed); err != nil {
-		return 0
-	}
-	return settingsRouteXrayPort(parsed)
 }
 
 // AddInbound creates a new inbound configuration.

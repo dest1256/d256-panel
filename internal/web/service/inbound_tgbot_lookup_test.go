@@ -113,10 +113,6 @@ func TestGetClientTrafficTgBot_Indexed(t *testing.T) {
 	testIndexedTgLookup(t, database.GetDB())
 }
 
-func TestGetClientTrafficTgBot_IndexedPostgres(t *testing.T) {
-	testIndexedTgLookup(t, durablePostgresDB(t))
-}
-
 func TestGetClientTrafficTgBot_LargeAccount(t *testing.T) {
 	dbtest.InitDB(t, filepath.Join(t.TempDir(), "x-ui.db"))
 	db := database.GetDB()

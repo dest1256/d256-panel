@@ -15,33 +15,6 @@ import (
 // Any merge that sees it attached again inside this window clears the mark.
 const syncOrphanReapGrace = 15 * time.Minute
 
-// A traffic row with no clients row behind it is drift the orphan sweep will
-// never mark, so it stays on the old delete-immediately path.
-func clientRecordExists(tx *gorm.DB, email string) bool {
-	var n int64
-	if err := tx.Model(&model.ClientRecord{}).Where("email = ?", email).Count(&n).Error; err != nil {
-		return false
-	}
-	return n > 0
-}
-
-func markSyncOrphan(tx *gorm.DB, email string, nowMs int64) error {
-	if email == "" {
-		return nil
-	}
-	return tx.Model(&model.ClientRecord{}).
-		Where("email = ? AND sync_orphaned_at = 0", email).
-		Update("sync_orphaned_at", nowMs).Error
-}
-
-// A client that is attached again is not orphaned, whatever an earlier merge
-// concluded — this is what makes a bad merge recoverable instead of fatal.
-func clearSyncOrphanMarks(tx *gorm.DB) error {
-	return tx.Model(&model.ClientRecord{}).
-		Where("sync_orphaned_at > 0 AND EXISTS (SELECT 1 FROM client_inbounds WHERE client_inbounds.client_id = clients.id)").
-		Update("sync_orphaned_at", 0).Error
-}
-
 // ReapSyncOrphans deletes the clients the node-snapshot sweep marked and no
 // later merge reclaimed. It is the only path that hard-deletes for that sweep.
 func (s *ClientService) ReapSyncOrphans() (int, error) {

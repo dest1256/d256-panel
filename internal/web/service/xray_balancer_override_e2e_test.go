@@ -143,39 +143,6 @@ func liveBalancerOverride(t *testing.T, process *xray.Process, tag string) strin
 	return info.Override
 }
 
-// routeFor is the outbound the running core picks for a TCP connection to port.
-func routeFor(process *xray.Process, port int) (string, error) {
-	api := xray.XrayAPI{}
-	if err := api.Init(process.GetAPIPort()); err != nil {
-		return "", err
-	}
-	defer api.Close()
-	result, err := api.TestRoute(xray.RouteTestRequest{IP: "203.0.113.1", Port: port})
-	if err != nil {
-		return "", err
-	}
-	return result.OutboundTag, nil
-}
-
-func liveRoute(t *testing.T, process *xray.Process, port int) string {
-	t.Helper()
-	route, err := routeFor(process, port)
-	if err != nil {
-		t.Fatalf("TestRoute(port %d): %v", port, err)
-	}
-	return route
-}
-
-// saveDuringTest hot-applies cfg the way RestartXray does, holding the package lock.
-func saveDuringTest(t *testing.T, process *xray.Process, cfg *xray.Config) {
-	t.Helper()
-	lock.Lock()
-	defer lock.Unlock()
-	if applied, err := (&XrayService{}).tryHotApply(process, cfg); err != nil || !applied {
-		t.Fatal("tryHotApply = false, want the change applied live")
-	}
-}
-
 // Every routing save is hot-applied with AddRule(shouldAppend=false), which
 // rebuilds all balancers and used to drop the operator's override silently.
 func TestBalancerOverrideSurvivesRoutingHotApply(t *testing.T) {

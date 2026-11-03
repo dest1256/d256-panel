@@ -1,10 +1,7 @@
 package service
 
 import (
-	"fmt"
 	"path/filepath"
-	"regexp"
-	"sync"
 	"testing"
 
 	"gorm.io/gorm"
@@ -32,18 +29,6 @@ func createNodeInbound(t *testing.T, db *gorm.DB, nodeID int, tag string, port i
 	}
 }
 
-// createNodeInboundWithClient mirrors createNodeInbound but stores the client
-// in the settings JSON, which the node sync turns into a client_inbounds link.
-func createNodeInboundWithClient(t *testing.T, db *gorm.DB, nodeID int, tag string, port int, email string) {
-	t.Helper()
-	nid := nodeID
-	settings := fmt.Sprintf(`{"clients": [{"email": %q, "enable": true}]}`, email)
-	ib := &model.Inbound{UserId: 1, Tag: tag, Enable: true, Port: port, Protocol: model.VLESS, NodeID: &nid, Settings: settings}
-	if err := db.Create(ib).Error; err != nil {
-		t.Fatalf("create node inbound %q: %v", tag, err)
-	}
-}
-
 func readTraffic(t *testing.T, db *gorm.DB, email string) xray.ClientTraffic {
 	t.Helper()
 	var ct xray.ClientTraffic
@@ -51,58 +36,6 @@ func readTraffic(t *testing.T, db *gorm.DB, email string) xray.ClientTraffic {
 		t.Fatalf("read client_traffics %q: %v", email, err)
 	}
 	return ct
-}
-
-func assertUpDown(t *testing.T, ct xray.ClientTraffic, wantUp, wantDown int64, when string) {
-	t.Helper()
-	if ct.Up != wantUp || ct.Down != wantDown {
-		t.Errorf("%s: up=%d down=%d, want %d/%d", when, ct.Up, ct.Down, wantUp, wantDown)
-	}
-}
-
-var clientWriteSQL = regexp.MustCompile(`(?i)^\s*(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+["` + "`" + `]?(clients|client_inbounds|client_traffics|node_client_traffics)\b`)
-
-// countClientRowWrites returns, per client table, how many rows fn's
-// INSERT/UPDATE/DELETE statements touched.
-func countClientRowWrites(t *testing.T, fn func()) map[string]int64 {
-	t.Helper()
-	db := database.GetDB()
-	var mu sync.Mutex
-	rows := map[string]int64{}
-	record := func(tx *gorm.DB) {
-		if tx.Error != nil || tx.RowsAffected == 0 || tx.Statement == nil {
-			return
-		}
-		if m := clientWriteSQL.FindStringSubmatch(tx.Statement.SQL.String()); m != nil {
-			mu.Lock()
-			rows[m[1]] += tx.RowsAffected
-			mu.Unlock()
-		}
-	}
-	const name = "test:count_client_row_writes"
-	cb := db.Callback()
-	for _, err := range []error{
-		cb.Create().After("gorm:create").Register(name, record),
-		cb.Update().After("gorm:update").Register(name, record),
-		cb.Delete().After("gorm:delete").Register(name, record),
-		cb.Raw().After("gorm:raw").Register(name, record),
-	} {
-		if err != nil {
-			t.Fatalf("register write callback: %v", err)
-		}
-	}
-	defer func() {
-		for _, err := range []error{
-			cb.Create().Remove(name), cb.Update().Remove(name),
-			cb.Delete().Remove(name), cb.Raw().Remove(name),
-		} {
-			if err != nil {
-				t.Errorf("remove write callback: %v", err)
-			}
-		}
-	}()
-	fn()
-	return rows
 }
 
 func TestDelClientStat_CleansNodeBaselines(t *testing.T) {

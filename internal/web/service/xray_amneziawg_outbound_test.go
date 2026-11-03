@@ -1,30 +1,13 @@
 package service
 
 import (
-	"encoding/json"
 	"testing"
 
 	wgutil "github.com/mhsanaei/3x-ui/v3/internal/util/wireguard"
-	"github.com/mhsanaei/3x-ui/v3/internal/xray"
 )
 
 func wgKeypairForTest() (priv, pub string, err error) {
 	return wgutil.GenerateWireguardKeypair()
-}
-
-func makeAWGOutboundConfig(t *testing.T) *xray.Config {
-	t.Helper()
-	cfg := &xray.Config{}
-	err := json.Unmarshal([]byte(`{
-		"outbounds": [
-			{"protocol": "freedom", "tag": "direct"},
-			{"protocol": "amneziawg", "tag": "awg-hop", "settings": {"secretKey": "x"}}
-		]
-	}`), cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return cfg
 }
 
 func TestCheckXrayConfig_RejectsBrokenAWGOutbound(t *testing.T) {

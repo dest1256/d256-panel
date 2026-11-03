@@ -2,7 +2,6 @@ package service
 
 import (
 	"testing"
-	"time"
 )
 
 // TestMergeActivationExpiry covers the pure reconciliation rule in isolation.
@@ -38,7 +37,4 @@ func TestMergeActivationExpiry(t *testing.T) {
 
 // Relative to the run: the merge rules now compare the master deadline against
 // wall-clock now, so fixed timestamps would rot into the wrong side of it.
-var (
-	earlyAbs = time.Now().UnixMilli() - 30*86400000
-	lateAbs  = time.Now().UnixMilli() + 30*86400000
-)
+var ()

@@ -28,15 +28,6 @@ func TestMtprotoRoutesThroughXray(t *testing.T) {
 	}
 }
 
-func routeXrayPortOf(t *testing.T, settings string) int {
-	t.Helper()
-	var parsed map[string]any
-	if err := json.Unmarshal([]byte(settings), &parsed); err != nil {
-		t.Fatalf("settings not valid JSON: %v\n%s", err, settings)
-	}
-	return settingsRouteXrayPort(parsed)
-}
-
 func TestFillProtocolDefaultsMtproto(t *testing.T) {
 	cs := &ClientService{}
 	ib := &model.Inbound{Protocol: model.MTProto, Settings: `{"fakeTlsDomain":"example.com"}`}

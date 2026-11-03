@@ -15,7 +15,6 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/runtime"
-	"github.com/mhsanaei/3x-ui/v3/internal/xray"
 
 	"gorm.io/gorm"
 )
@@ -302,13 +301,6 @@ func (s *NodeService) NodeExists(id int) (bool, error) {
 	return count > 0, nil
 }
 
-// staticEgressResolver hands a fixed proxy URL to runtime.NewRemote. An empty
-// string yields a direct connection, so it doubles as the graceful fallback
-// when a temporary bridge can't be built.
-type staticEgressResolver string
-
-func (r staticEgressResolver) NodeEgressProxyURL(int) string { return string(r) }
-
 // EnsureInboundTagAllowed adds a panel-managed inbound's tag to the node's
 // selection when the node syncs in "selected" mode. Without it, the next
 // traffic sync would filter the tag out of the snapshot and the orphan sweep
@@ -344,38 +336,6 @@ func (s *NodeService) EnsureInboundTagAllowedTx(tx *gorm.DB, nodeID int, tag str
 	}
 	return tx.Model(model.Node{}).Where("id = ?", nodeID).
 		Updates(map[string]any{"inbound_tags": string(buf)}).Error
-}
-
-func nodeSelectedTagSet(n *model.Node) map[string]struct{} {
-	if n == nil || n.InboundSyncMode != "selected" {
-		return nil
-	}
-	prefix := nodeTagPrefix(&n.Id)
-	allowed := make(map[string]struct{}, len(n.InboundTags)*2)
-	for _, tag := range n.InboundTags {
-		allowed[tag] = struct{}{}
-		if prefix != "" {
-			if stripped, found := strings.CutPrefix(tag, prefix); found {
-				allowed[stripped] = struct{}{}
-			} else {
-				allowed[prefix+tag] = struct{}{}
-			}
-		}
-	}
-	return allowed
-}
-
-// A deselected tag is still served by the node — FilterNodeSnapshot just stops
-// reporting it — so its absence must never be read as "the node deleted it".
-func unmanagedTagPredicate(n *model.Node) func(string) bool {
-	managed := nodeSelectedTagSet(n)
-	if managed == nil {
-		return func(string) bool { return false }
-	}
-	return func(tag string) bool {
-		_, ok := managed[tag]
-		return !ok
-	}
 }
 
 func (s *NodeService) Delete(id int) error {
@@ -601,19 +561,6 @@ func (s *NodeService) AggregateNodeMetric(id int, metric string, bucketSeconds i
 	return nodeMetrics.aggregate(nodeMetricKey(id, metric), bucketSeconds, maxPoints)
 }
 
-// outboundBridge is one withOutboundBridge call's temporary inbound and leading
-// routing rule, tied to the core process it was built in.
-type outboundBridge struct {
-	proc       *xray.Process
-	api        xray.XrayAPI
-	inboundTag string
-	proxyURL   string
-}
-
-// A status envelope holds a handful of scalars; the cap keeps a hostile or
-// broken node from dictating the master's allocation on every heartbeat.
-const maxProbeBodyBytes = 1 << 20 // 1 MiB
-
 type ProbeResultUI struct {
 	Status             string   `json:"status" example:"online"`
 	LatencyMs          int      `json:"latencyMs" example:"42"`
@@ -642,6 +589,7 @@ func (s *NodeService) UpdateDescriptive(id int, name, remark, address string) er
 	}
 	return nil
 }
+
 func normalizeBasePath(p string) string {
 	p = strings.TrimSpace(p)
 	if p == "" {

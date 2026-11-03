@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 )
 
@@ -13,23 +12,6 @@ func mustUnmarshal(t *testing.T, raw string, v any) {
 	if err := json.Unmarshal([]byte(raw), v); err != nil {
 		t.Fatalf("unmarshal %q: %v", raw, err)
 	}
-}
-
-func settingsClientEmails(t *testing.T, inboundId int) []string {
-	t.Helper()
-	var ib model.Inbound
-	if err := database.GetDB().First(&ib, inboundId).Error; err != nil {
-		t.Fatalf("load inbound %d: %v", inboundId, err)
-	}
-	clients, err := (&InboundService{}).GetClients(&ib)
-	if err != nil {
-		t.Fatalf("GetClients: %v", err)
-	}
-	emails := make([]string, 0, len(clients))
-	for _, c := range clients {
-		emails = append(emails, c.Email)
-	}
-	return emails
 }
 
 func TestDedupeSettingsClients(t *testing.T) {

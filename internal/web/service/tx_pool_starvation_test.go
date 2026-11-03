@@ -36,26 +36,6 @@ func runWithoutSecondConn(t *testing.T, name string, fn func() error) error {
 	}
 }
 
-func createNodeInboundWithSettings(t *testing.T, db *gorm.DB, nodeID int, tag string, port int, settings string) {
-	t.Helper()
-	nid := nodeID
-	ib := &model.Inbound{UserId: 1, Tag: tag, Enable: true, Port: port, Protocol: model.VLESS, NodeID: &nid, Settings: settings}
-	if err := db.Create(ib).Error; err != nil {
-		t.Fatalf("create node inbound %q: %v", tag, err)
-	}
-}
-
-func assertNoTraffic(t *testing.T, email string) {
-	t.Helper()
-	var n int64
-	if err := database.GetDB().Model(xray.ClientTraffic{}).Where("email = ?", email).Count(&n).Error; err != nil {
-		t.Fatalf("count traffic %q: %v", email, err)
-	}
-	if n != 0 {
-		t.Fatalf("traffic rows for %q = %d, want 0", email, n)
-	}
-}
-
 func TestUpdateClientTrafficsStaysOnOneConnection(t *testing.T) {
 	setupBulkDB(t)
 	svc := &InboundService{}

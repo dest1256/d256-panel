@@ -694,15 +694,6 @@ func routingTagIsBalancer(routing map[string]any, tag string) bool {
 	return false
 }
 
-// mtprotoEgressSocksSettings is the loopback SOCKS server a routed mtproto
-// inbound exposes for its mtg sidecar to dial Telegram through. mtg makes plain
-// TCP connections, so UDP is left off (matching the panel egress bridge).
-const mtprotoEgressSocksSettings = `{"auth":"noauth","udp":false}`
-
-// Peers resolve DNS inside the tunnel, so domain rules match only via sniffing; routeOnly
-// keeps the dial on the peer's IP, else Telegram's FakeTLS (IP + foreign SNI) breaks.
-const amneziawgEgressSniffingSettings = `{"enabled":true,"destOverride":["http","tls","quic","fakedns"],"routeOnly":true}`
-
 // Keep sniffed domains available for routing without replacing the requested destination.
 const tuicEgressSniffingSettings = `{"enabled":true,"destOverride":["http","tls","quic","fakedns"],"routeOnly":true}`
 

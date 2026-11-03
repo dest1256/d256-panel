@@ -5,21 +5,9 @@ import (
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	"github.com/mhsanaei/3x-ui/v3/internal/xray"
 
 	"gorm.io/gorm"
 )
-
-func countClientRows(t *testing.T, db *gorm.DB, email string) (records, traffics int64) {
-	t.Helper()
-	if err := db.Model(&model.ClientRecord{}).Where("email = ?", email).Count(&records).Error; err != nil {
-		t.Fatalf("count clients %q: %v", email, err)
-	}
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).Count(&traffics).Error; err != nil {
-		t.Fatalf("count client_traffics %q: %v", email, err)
-	}
-	return records, traffics
-}
 
 func seedNodeRow(t *testing.T, db *gorm.DB, n *model.Node) {
 	t.Helper()

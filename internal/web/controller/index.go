@@ -26,7 +26,6 @@ type IndexController struct {
 
 	settingService service.SettingService
 	userService    panel.UserService
-	panelService   panel.PanelService
 }
 
 // NewIndexController creates a new IndexController and initializes its routes.

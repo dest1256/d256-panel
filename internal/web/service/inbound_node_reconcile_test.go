@@ -1,97 +1,11 @@
 package service
 
 import (
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
-	"sort"
-	"strconv"
-	"strings"
-	"sync"
 	"testing"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 )
-
-// fakeNodePanel serves just enough of the node API for ReconcileNode: the
-// inbound list plus update/del endpoints, recording which remote ids get
-// deleted.
-func fakeNodePanel(t *testing.T, tagToID map[string]int) (*httptest.Server, func() []int) {
-	t.Helper()
-	var mu sync.Mutex
-	var deleted []int
-	writeOK := func(w http.ResponseWriter, obj any) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"success": true, "msg": "", "obj": obj})
-	}
-	mux := http.NewServeMux()
-	mux.HandleFunc("/panel/api/inbounds/list", func(w http.ResponseWriter, _ *http.Request) {
-		type row struct {
-			Id  int    `json:"id"`
-			Tag string `json:"tag"`
-		}
-		rows := make([]row, 0, len(tagToID))
-		for tag, id := range tagToID {
-			rows = append(rows, row{Id: id, Tag: tag})
-		}
-		writeOK(w, rows)
-	})
-	mux.HandleFunc("/panel/api/inbounds/update/", func(w http.ResponseWriter, _ *http.Request) {
-		writeOK(w, nil)
-	})
-	mux.HandleFunc("/panel/api/inbounds/del/", func(w http.ResponseWriter, r *http.Request) {
-		id, err := strconv.Atoi(strings.TrimPrefix(r.URL.Path, "/panel/api/inbounds/del/"))
-		if err != nil {
-			http.Error(w, "bad id", http.StatusBadRequest)
-			return
-		}
-		mu.Lock()
-		deleted = append(deleted, id)
-		mu.Unlock()
-		writeOK(w, nil)
-	})
-	ts := httptest.NewServer(mux)
-	t.Cleanup(ts.Close)
-	return ts, func() []int {
-		mu.Lock()
-		defer mu.Unlock()
-		out := append([]int(nil), deleted...)
-		sort.Ints(out)
-		return out
-	}
-}
-
-func reconcileTestNode(t *testing.T, ts *httptest.Server, name, mode string, tags []string) *model.Node {
-	t.Helper()
-	u, err := url.Parse(ts.URL)
-	if err != nil {
-		t.Fatalf("parse test server URL: %v", err)
-	}
-	port, err := strconv.Atoi(u.Port())
-	if err != nil {
-		t.Fatalf("parse test server port: %v", err)
-	}
-	n := &model.Node{
-		Name:                name,
-		Scheme:              "http",
-		Address:             u.Hostname(),
-		Port:                port,
-		BasePath:            "/",
-		ApiToken:            "tok",
-		Enable:              true,
-		AllowPrivateAddress: true,
-		Status:              "online",
-		InboundSyncMode:     mode,
-		InboundTags:         tags,
-		InboundsAdoptedAt:   1,
-	}
-	if err := database.GetDB().Create(n).Error; err != nil {
-		t.Fatalf("create node: %v", err)
-	}
-	return n
-}
 
 func TestEnsureInboundTagAllowed(t *testing.T) {
 	setupConflictDB(t)

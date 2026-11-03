@@ -48,3 +48,4 @@ docker-compose.override.yml
 # d256
 build/
 .cache/
+.smoke-client.json

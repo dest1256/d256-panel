@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	"math"
 	"mime/multipart"
 	stdnet "net"
 	"net/http"
@@ -748,7 +747,6 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 	}
 	status.Xray.Version = s.xrayService.GetXrayVersion()
 
-
 	status.PanelVersion = config.GetPanelVersion()
 	if guid, err := s.settingService.GetPanelGuid(); err == nil {
 		status.PanelGuid = guid
@@ -1330,11 +1328,6 @@ type PeerActivity struct {
 	Online    bool  `json:"online" example:"true"`
 }
 
-// amneziawgOnlineWindow mirrors the standard WireGuard convention (and this
-// fork's own prior kernel-module behavior): a handshake this recent counts
-// as online.
-const amneziawgOnlineWindow = 180 * time.Second
-
 // AmneziaWGLogs is what the overview's AmneziaWG log view renders: the live
 // per-peer activity of every running embedded interface, plus the panel's
 // own recent AmneziaWG lifecycle log lines that explain a peer being absent
@@ -1343,29 +1336,6 @@ type AmneziaWGLogs struct {
 	Peers   []PeerActivity `json:"peers"`
 	Events  []string       `json:"events" example:"[\"2025/01/01 12:00:00 amneziawg: started interface awg1 for inbound 1\"]"`
 	Running bool           `json:"running" example:"true"`
-}
-
-// amneziawgEventMarker selects the panel's own AmneziaWG log lines: every
-// logger call in internal/amneziawg, internal/amneziawgnet and their jobs
-// prefixes its message with it.
-const amneziawgEventMarker = "amneziawg"
-
-// amneziawgLogActivity gathers live PeerActivity rows across every enabled,
-// non-node-hosted AmneziaWG inbound, newest handshake first. An inbound
-// amneziawgnet has no running Device for yet (not reconciled, disabled,
-// errored) contributes no rows -- not reported as an error, since the
-// caller (GetAmneziaWGLogs) already has a device-agnostic Running flag from
-// amneziawgnet.GetManager().HasRunning() for that.
-// clampUint64ToInt64 saturates at math.MaxInt64 instead of wrapping negative,
-// for a live uint64 byte counter (amneziawgnet's own UAPI-dump snapshot, not
-// a DB-accumulated total) going into an int64 API field -- unreachable in
-// practice at real traffic volumes, but a silent negative value would be
-// worse than a saturated one if it were ever hit.
-func clampUint64ToInt64(v uint64) int64 {
-	if v > math.MaxInt64 {
-		return math.MaxInt64
-	}
-	return int64(v)
 }
 
 func (s *ServerService) GetXrayLogs(

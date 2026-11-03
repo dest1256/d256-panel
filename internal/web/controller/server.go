@@ -23,9 +23,8 @@ var filenameRegex = regexp.MustCompile(`^[a-zA-Z0-9_\-.]+$`)
 type ServerController struct {
 	BaseController
 
-	serverService  service.ServerService
-	settingService service.SettingService
-	panelService   panel.PanelService
+	serverService service.ServerService
+	panelService  panel.PanelService
 }
 
 // NewServerController creates a new ServerController, initializes routes, and starts background tasks.

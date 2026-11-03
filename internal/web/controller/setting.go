@@ -49,7 +49,6 @@ type SettingController struct {
 	userService     panel.UserService
 	panelService    panel.PanelService
 	apiTokenService panel.ApiTokenService
-	xrayService     service.XrayService
 }
 
 // NewSettingController creates a new SettingController and initializes its routes.

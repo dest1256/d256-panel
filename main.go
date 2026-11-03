@@ -609,4 +609,3 @@ Commands:
                    an AmneziaWG inbound's kernel mode)
 `
 }
-

@@ -89,6 +89,10 @@ image: ## Production runtime image (multi-stage Dockerfile)
 .PHONY: release
 release: verify image ## Full gate, then the runtime image
 
+.PHONY: smoke
+smoke: ## End-to-end test: panel + node + Xray client (needs ../d256-node images and internet)
+	bash deploy/smoke/smoke.sh
+
 .PHONY: verify
 verify: lint format-check typecheck test build vulncheck ## Full gate (mirrors CI)
 	@echo "verify: OK"

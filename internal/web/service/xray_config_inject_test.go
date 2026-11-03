@@ -2,39 +2,12 @@ package service
 
 import (
 	"encoding/json"
-	"fmt"
-	"os"
 	"testing"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	xuilogger "github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/testpg"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/json_util"
 	"github.com/mhsanaei/3x-ui/v3/internal/xray"
-
-	"github.com/op/go-logging"
 )
-
-func TestMain(m *testing.M) {
-	// A test binary re-executed with MTG_FAKE_CHILD=1 poses as an mtg child
-	// process (see mtproto_fake_test.go) and never reaches the test runner.
-	if os.Getenv("MTG_FAKE_CHILD") == "1" {
-		fakeMtgChildMain()
-	}
-	// injectPanelEgress logs when it skips injection; the package logger must
-	// exist before any test exercises a skipped path.
-	xuilogger.InitLogger(logging.ERROR)
-	// Against PostgreSQL every package shares one database; give this one its
-	// own schema so a parallel package and a previous run cannot reach it.
-	cleanup, err := testpg.IsolatePackage("internal_web_service")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	code := m.Run()
-	cleanup()
-	os.Exit(code)
-}
 
 func TestEnsureAPIServices(t *testing.T) {
 	// legacy template without RoutingService gets it injected
@@ -503,20 +476,4 @@ func TestInjectMtprotoEgress_BadRoutingSkips(t *testing.T) {
 	if string(cfg.RouterConfig) != `{not json` {
 		t.Fatalf("unparsable routing must be left untouched, got %s", cfg.RouterConfig)
 	}
-}
-
-type v6EgressRouting struct {
-	Rules []struct {
-		InboundTag  []string `json:"inboundTag"`
-		User        []string `json:"user"`
-		IP          []string `json:"ip"`
-		OutboundTag string   `json:"outboundTag"`
-		Type        string   `json:"type"`
-	} `json:"rules"`
-}
-
-type v6EgressOutbound struct {
-	Tag         string `json:"tag"`
-	Protocol    string `json:"protocol"`
-	SendThrough string `json:"sendThrough"`
 }

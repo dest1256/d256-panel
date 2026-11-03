@@ -1,3 +1,0 @@
-package sub
-
-const mtprotoTestSecret = "ee8196fe6ed8b637d001f91d6952cfcdf07777772e636c6f7564666c6172652e636f6d"

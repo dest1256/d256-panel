@@ -2,31 +2,9 @@ package service
 
 import (
 	"testing"
-	"time"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-
-	"gorm.io/gorm"
 )
-
-func readOrphanMark(t *testing.T, db *gorm.DB, email string) int64 {
-	t.Helper()
-	var row model.ClientRecord
-	if err := db.Where("email = ?", email).First(&row).Error; err != nil {
-		t.Fatalf("read client %q: %v", email, err)
-	}
-	return row.SyncOrphanedAt
-}
-
-func backdateOrphanMark(t *testing.T, db *gorm.DB, email string) {
-	t.Helper()
-	past := time.Now().Add(-2 * syncOrphanReapGrace).UnixMilli()
-	if err := db.Model(&model.ClientRecord{}).
-		Where("email = ?", email).
-		Update("sync_orphaned_at", past).Error; err != nil {
-		t.Fatalf("backdate orphan mark: %v", err)
-	}
-}
 
 // The reaper is scoped to the node sweep. Orphans from any other cause carry no
 // mark and keep their existing manual-cleanup semantics.

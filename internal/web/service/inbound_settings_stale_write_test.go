@@ -81,32 +81,6 @@ func autoRenewTick(tx *gorm.DB) error {
 	return err
 }
 
-// renewYTick writes the renewal autoRenewClients would commit for y@stale; it
-// skips clients hosted only on a node, so the node case applies it directly.
-func renewYTick(inboundId int) func(tx *gorm.DB) error {
-	return func(tx *gorm.DB) error {
-		var ib model.Inbound
-		if err := tx.First(&ib, inboundId).Error; err != nil {
-			return err
-		}
-		var settings map[string]any
-		if err := json.Unmarshal([]byte(ib.Settings), &settings); err != nil {
-			return err
-		}
-		for _, c := range settings["clients"].([]any) {
-			if m := c.(map[string]any); m["email"] == "y@stale" {
-				m["enable"] = true
-				m["expiryTime"] = time.Now().Add(30 * 24 * time.Hour).UnixMilli()
-			}
-		}
-		b, err := json.MarshalIndent(settings, "", "  ")
-		if err != nil {
-			return err
-		}
-		return tx.Model(&model.Inbound{}).Where("id = ?", inboundId).Update("settings", string(b)).Error
-	}
-}
-
 func settingsClient(t *testing.T, inboundId int, email string) (model.Client, bool) {
 	t.Helper()
 	ib, err := (&InboundService{}).GetInbound(inboundId)

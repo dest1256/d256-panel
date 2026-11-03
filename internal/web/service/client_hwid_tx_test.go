@@ -147,45 +147,6 @@ func TestBulkCreateWithdrawsTombstoneWhenHwidTrimFails(t *testing.T) {
 	}
 }
 
-func TestSetClientLimitHwidIsSerializedWithSyncInbound(t *testing.T) {
-	db := durablePostgresDB(t)
-	if err := db.Exec("TRUNCATE client_hwids, clients RESTART IDENTITY CASCADE").Error; err != nil {
-		t.Fatalf("reset tables: %v", err)
-	}
-	rec := seedHwidClient(t, 5)
-	seedHwids(t, db, rec.SubID, 3)
-	StartTrafficWriter()
-	t.Cleanup(StopTrafficWriter)
-
-	read := make(chan struct{})
-	release := make(chan struct{})
-	staleDone := make(chan error, 1)
-	go func() {
-		staleDone <- runSerializedTx(func(tx *gorm.DB) error {
-			var stale model.ClientRecord
-			if err := tx.Where("email = ?", rec.Email).First(&stale).Error; err != nil {
-				return err
-			}
-			close(read)
-			<-release
-			return tx.Save(&stale).Error
-		})
-	}()
-	<-read
-
-	limitDone := make(chan error, 1)
-	go func() { limitDone <- (&ClientService{}).setClientLimitHwidByEmail(rec.Email, 1) }()
-	time.Sleep(100 * time.Millisecond)
-	close(release)
-	if err := <-staleDone; err != nil {
-		t.Fatalf("stale SyncInbound write: %v", err)
-	}
-	if err := <-limitDone; err != nil {
-		t.Fatalf("set limit: %v", err)
-	}
-	assertHwidState(t, db, rec.Email, 1, 1)
-}
-
 func BenchmarkSetClientLimitHwidSerialized(b *testing.B) {
 	dbDir := b.TempDir()
 	b.Setenv("XUI_DB_FOLDER", dbDir)

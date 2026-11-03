@@ -116,7 +116,6 @@ type Server struct {
 	api   *controller.APIController
 	ws    *controller.WebSocketController
 
-	xrayService    service.XrayService
 	settingService service.SettingService
 
 	wsHub *websocket.Hub

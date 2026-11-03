@@ -1,10 +1,8 @@
 package sub
 
 import (
-	"encoding/base64"
 	"fmt"
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
@@ -40,40 +38,6 @@ func TestGetInboundsBySubIdIncludesAmneziaWG(t *testing.T) {
 	if len(inbounds) != 1 || inbounds[0].Id != in.Id {
 		t.Fatalf("amneziawg inbound not returned for subId: %+v", inbounds)
 	}
-}
-
-// peerFieldOrder is wg-quick(8)'s own [Peer] order. The panel emits an
-// AmneziaWG .conf from three independent places -- this one, and the frontend's
-// genAmneziaWGConfig and buildAmneziaWGClientConfig -- and a user comparing a
-// subscription link against a downloaded .conf sees any drift immediately.
-var peerFieldOrder = []string{"PublicKey", "PresharedKey", "AllowedIPs", "Endpoint", "PersistentKeepalive"}
-
-func peerFields(t *testing.T, conf string) []string {
-	t.Helper()
-	idx := strings.Index(conf, "[Peer]")
-	if idx < 0 {
-		t.Fatalf("config has no [Peer] block:\n%s", conf)
-	}
-	var got []string
-	for line := range strings.SplitSeq(conf[idx:], "\n") {
-		key := strings.TrimSpace(strings.SplitN(line, "=", 2)[0])
-		if slices.Contains(peerFieldOrder, key) {
-			got = append(got, key)
-		}
-	}
-	return got
-}
-
-func decodeAmneziaWGSubLink(t *testing.T, link string) string {
-	t.Helper()
-	if !strings.HasPrefix(link, "vpn://") {
-		t.Fatalf("link = %q, want vpn:// prefix", link)
-	}
-	raw, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(link, "vpn://"))
-	if err != nil {
-		t.Fatalf("decode vpn link: %v\n got: %s", err, link)
-	}
-	return string(raw)
 }
 
 // Membership and account metadata stay on the normalized row. Settings may carry a

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"net/netip"
 	"slices"
 	"strconv"
 	"strings"
@@ -768,18 +767,6 @@ func (s *SubClashService) buildTuicProxy(subReq *SubService, inbound *model.Inbo
 		proxy["skip-cert-verify"] = true
 	}
 	return proxy
-}
-
-// allBareIPs reports whether every entry is a plain IP address — no port,
-// scheme, and no zone, which mihomo brackets into a udp:// URL it then rejects.
-func allBareIPs(servers []string) bool {
-	for _, s := range servers {
-		addr, err := netip.ParseAddr(s)
-		if err != nil || addr.Zone() != "" {
-			return false
-		}
-	}
-	return true
 }
 
 // buildXhttpClashOpts converts xhttpSettings from 3x-ui's camelCase JSON
