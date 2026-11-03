@@ -18,7 +18,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/amneziawgnet"
 	"github.com/mhsanaei/3x-ui/v3/internal/config"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/json_util"
 	"github.com/mhsanaei/3x-ui/v3/internal/xray"
@@ -400,18 +399,7 @@ func buildBatchTestConfig(items []*httpBatchItem, allOutbounds []any, ports []in
 			bridged = append(bridged, ob)
 			continue
 		}
-		raw, err := json.Marshal(m)
-		if err != nil {
-			continue
-		}
-		repl, ok := amneziawgnet.BuildSocksBridge(raw)
-		if !ok {
-			continue
-		}
-		var replacement any
-		if json.Unmarshal(repl, &replacement) == nil {
-			bridged = append(bridged, replacement)
-		}
+		// AmneziaWG outbounds are not supported; the entry is dropped.
 	}
 	outbounds = bridged
 	for _, ob := range outbounds {

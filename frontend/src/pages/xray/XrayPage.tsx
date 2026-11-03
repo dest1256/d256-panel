@@ -26,7 +26,6 @@ import { JsonEditor } from '@/components/form';
 import { setMessageInstance } from '@/utils/messageBus';
 
 import { BasicsTab } from './basics';
-import { propagateOutboundTagRename } from './basics/helpers';
 import { RoutingTab } from './routing';
 import { OutboundsTab } from './outbounds';
 import { BalancersTab } from './balancers';
@@ -36,7 +35,6 @@ import {
   detectBalancerCycles,
 } from './balancers/balancer-loopback';
 import { DnsTab } from './dns';
-import { WarpModal, NordModal, PiaModal } from './overrides';
 import './XrayPage.css';
 
 const SECTION_SLUGS = ['basic', 'routing', 'outbound', 'balancer', 'dns', 'advanced'];
@@ -80,9 +78,6 @@ export default function XrayPage() {
     resetToDefault,
   } = xs;
 
-  const [warpOpen, setWarpOpen] = useState(false);
-  const [nordOpen, setNordOpen] = useState(false);
-  const [piaOpen, setPiaOpen] = useState(false);
   const [advSettings, setAdvSettings] = useState<AdvKey>('xraySetting');
   const location = useLocation();
   const navigate = useNavigate();
@@ -117,33 +112,6 @@ export default function XrayPage() {
     if (tag) await testSubscriptionOutbound(tag, outbound, mode);
   }
 
-  function onAddOutbound(outbound: Record<string, unknown>) {
-    mutate((tt) => {
-      if (!Array.isArray(tt.outbounds)) tt.outbounds = [];
-      tt.outbounds.push(outbound as never);
-    });
-  }
-  function onResetOutbound(payload: {
-    index: number;
-    outbound: Record<string, unknown>;
-    oldTag?: string;
-    newTag?: string;
-  }) {
-    mutate((tt) => {
-      if (!tt.outbounds || payload.index < 0) return;
-      tt.outbounds[payload.index] = payload.outbound as never;
-      if (payload.oldTag && payload.newTag) {
-        propagateOutboundTagRename(tt, payload.oldTag, payload.newTag);
-      }
-    });
-  }
-  function onRemoveOutboundByTag(tag: string) {
-    mutate((tt) => {
-      if (!tt.outbounds) return;
-      const idx = tt.outbounds.findIndex((o) => o?.tag === tag);
-      if (idx >= 0) tt.outbounds.splice(idx, 1);
-    });
-  }
   const advancedText = useMemo(() => {
     if (advSettings === 'xraySetting') return xraySetting;
     const tpl = templateSettings;
@@ -250,9 +218,6 @@ export default function XrayPage() {
             onTest={onTestOutbound}
             onTestSubscription={onTestSubscription}
             onTestAll={testAllOutbounds}
-            onShowWarp={() => setWarpOpen(true)}
-            onShowNord={() => setNordOpen(true)}
-            onShowPia={() => setPiaOpen(true)}
             onRefreshXrayData={fetchAll}
           />
         );
@@ -365,29 +330,6 @@ export default function XrayPage() {
             </Spin>
           </Layout.Content>
         </Layout>
-
-        <WarpModal
-          open={warpOpen}
-          templateSettings={templateSettings}
-          onClose={() => setWarpOpen(false)}
-          onAddOutbound={onAddOutbound}
-          onResetOutbound={onResetOutbound}
-          onRemoveOutbound={onRemoveOutboundByTag}
-        />
-        <NordModal
-          open={nordOpen}
-          templateSettings={templateSettings}
-          onClose={() => setNordOpen(false)}
-          onAddOutbound={onAddOutbound}
-          onResetOutbound={onResetOutbound}
-        />
-        <PiaModal
-          open={piaOpen}
-          templateSettings={templateSettings}
-          onClose={() => setPiaOpen(false)}
-          onAddOutbound={onAddOutbound}
-          onResetOutbound={onResetOutbound}
-        />
       </Layout>
     </ConfigProvider>
   );

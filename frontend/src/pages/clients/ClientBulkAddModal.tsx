@@ -24,7 +24,6 @@ import { TLS_FLOW_CONTROL, TRAFFIC_RESETS } from '@/schemas/primitives';
 import { DateTimePicker, SelectAllClearButtons } from '@/components/form';
 import { FormField } from '@/components/form/rhf';
 import { useClients, type InboundOption } from '@/hooks/useClients';
-import { useFail2banStatusQuery, getLimitIpNotice } from '@/api/queries/useFail2banStatusQuery';
 import ClientRenewalFields from './ClientRenewalFields';
 import { ClientBulkAddFormSchema, type ClientBulkAddFormValues } from '@/schemas/client';
 
@@ -97,9 +96,9 @@ export default function ClientBulkAddModal({
   const trafficReset = useWatch({ control: methods.control, name: 'trafficReset' });
   const [delayedStart, setDelayedStart] = useState(false);
   const [saving, setSaving] = useState(false);
-  const fail2ban = useFail2banStatusQuery();
-  const limitIpDisabled = !fail2ban.usable;
-  const limitIpNotice = getLimitIpNotice(fail2ban, t);
+  // The per-client device limit is enforced by the node itself.
+  const limitIpDisabled = false;
+  const limitIpNotice = null;
 
   const [wasOpen, setWasOpen] = useState(false);
   if (open !== wasOpen) {

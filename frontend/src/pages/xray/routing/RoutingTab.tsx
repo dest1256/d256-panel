@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Button, Dropdown, Modal, Space, Table, Tabs, message } from 'antd';
 import {
-  AimOutlined,
   ControlOutlined,
   ExportOutlined,
   ImportOutlined,
@@ -16,7 +15,6 @@ import PromptModal from '@/components/feedback/PromptModal';
 import TextModal from '@/components/feedback/TextModal';
 import { isBalancerLoopbackTag } from '../balancers/balancer-loopback';
 import RoutingBasic from './RoutingBasic';
-import RouteTester from './RouteTester';
 import RuleFormModal from './RuleFormModal';
 import type { RoutingRule } from './RuleFormModal';
 import RuleCardList from './RuleCardList';
@@ -409,11 +407,6 @@ export default function RoutingTab({
                 </div>
               </Space>
             ),
-          },
-          {
-            key: 'tester',
-            label: catTabLabel(<AimOutlined aria-hidden />, t('pages.xray.routeTester'), isMobile),
-            children: <RouteTester inboundTags={inboundTagOptions} isMobile={isMobile} />,
           },
         ]}
       />

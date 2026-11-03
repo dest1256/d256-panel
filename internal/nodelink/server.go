@@ -114,6 +114,19 @@ func (h *Hub) Snapshots() []Snapshot {
 	return out
 }
 
+// OnlineByNode returns, per node id, the users that currently have a connection.
+func (h *Hub) OnlineByNode() map[int][]string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	out := make(map[int][]string, len(h.snaps))
+	for id, sn := range h.snaps {
+		if sn.Online && sn.Xray != nil && len(sn.Xray.OnlineUsers) > 0 {
+			out[id] = append([]string(nil), sn.Xray.OnlineUsers...)
+		}
+	}
+	return out
+}
+
 // Disconnect drops the live session of a node (used after revoke/delete).
 func (h *Hub) Disconnect(id int) {
 	h.mu.RLock()

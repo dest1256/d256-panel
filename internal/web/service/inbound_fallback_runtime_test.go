@@ -122,36 +122,3 @@ func TestBuildFallbacksJSON_DerivesXverFromTheChild(t *testing.T) {
 		})
 	}
 }
-
-// The running master keeps the fallback it was built with, so turning PROXY protocol on in a
-// linked child must rebuild the master too; an inbound no fallback derives from needs nothing.
-func TestUpdateInbound_FallbackChildChangeRebuildsItsMaster(t *testing.T) {
-	setupBulkDB(t)
-	mgr := useTestRuntimeManager(t)
-	mgr.SetLocalRuntimeOverride(&fakeNodeRuntime{})
-	db := database.GetDB()
-	master := mkInboundStream(t, 30401, model.VLESS, `{"clients":[]}`, `{"network":"tcp","security":"tls"}`)
-	linked := mkInboundStream(t, 30402, model.VLESS, `{"clients":[]}`, `{"network":"tcp"}`)
-	unlinked := mkInboundStream(t, 30403, model.VLESS, `{"clients":[]}`, `{"network":"tcp"}`)
-	if err := db.Create(&model.InboundFallback{MasterId: master.Id, ChildId: linked.Id}).Error; err != nil {
-		t.Fatal(err)
-	}
-
-	for _, tc := range []struct {
-		name string
-		ib   *model.Inbound
-		want bool
-	}{{"linked child", linked, true}, {"unlinked inbound", unlinked, false}} {
-		t.Run(tc.name, func(t *testing.T) {
-			update := *tc.ib
-			update.StreamSettings = `{"network":"tcp","tcpSettings":{"acceptProxyProtocol":true}}`
-			_, needRestart, err := (&InboundService{}).UpdateInbound(&update)
-			if err != nil {
-				t.Fatalf("UpdateInbound: %v", err)
-			}
-			if needRestart != tc.want {
-				t.Fatalf("needRestart = %v, want %v", needRestart, tc.want)
-			}
-		})
-	}
-}

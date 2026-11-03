@@ -25,11 +25,6 @@ import {
   findWireguardInbounds,
   isWireguardClient,
 } from './wireguardConfig';
-import {
-  buildAmneziaWGClientConfig,
-  findAmneziaWGInbounds,
-  isAmneziaWGClient,
-} from './amneziawgConfig';
 import { tunnelConfigEndpoints, tunnelEndpointLabel } from './tunnelEndpoints';
 import type { HostRecord } from '@/schemas/api/host';
 import './ClientInfoModal.css';
@@ -206,26 +201,6 @@ export default function ClientInfoModal({
       })
       .filter((c) => !!c.text);
   }, [client, wgInbounds, tunnelAllowedIPs, subSettings?.publicHost, hosts]);
-
-  const awgInbounds = useMemo(
-    () => findAmneziaWGInbounds(client, inboundsById),
-    [client, inboundsById],
-  );
-  const awgConfigs = useMemo(() => {
-    if (!client || !isAmneziaWGClient(client)) return [];
-    const host = window.location.hostname;
-    const publicHost = subSettings?.publicHost ?? '';
-    return awgInbounds
-      .flatMap((ib) => {
-        const address = tunnelAllowedIPs?.[ib.id] ?? '';
-        return tunnelConfigEndpoints(ib, hosts, host, publicHost).map((ep) => ({
-          inbound: ib,
-          endpoint: tunnelEndpointLabel(ep),
-          text: buildAmneziaWGClientConfig(client, ib, host, publicHost, address, ep),
-        }));
-      })
-      .filter((c) => !!c.text);
-  }, [client, awgInbounds, tunnelAllowedIPs, subSettings?.publicHost, hosts]);
 
   async function copyValue(text: string) {
     if (!text) return;
@@ -814,30 +789,6 @@ export default function ClientInfoModal({
                       fileName={meta.fileName}
                       qrRemark={meta.qrRemark}
                       tagColor="cyan"
-                    />
-                  );
-                })}
-              </>
-            )}
-
-            {awgConfigs.length > 0 && client && (
-              <>
-                <Divider>{t('pages.clients.amneziaWgConfig')}</Divider>
-                {awgConfigs.map(({ inbound, endpoint, text }) => {
-                  const meta = formatTunnelConfigMeta(
-                    inbound,
-                    client.email,
-                    awgConfigs.length,
-                    endpoint,
-                  );
-                  return (
-                    <ConfigBlock
-                      key={`awg-${inbound.id}-${endpoint}`}
-                      label={meta.label || t('pages.clients.config')}
-                      text={text}
-                      fileName={meta.fileName}
-                      qrRemark={meta.qrRemark}
-                      tagColor="purple"
                     />
                   );
                 })}

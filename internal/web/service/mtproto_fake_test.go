@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -15,7 +14,6 @@ import (
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	"github.com/mhsanaei/3x-ui/v3/internal/mtproto"
 	"github.com/mhsanaei/3x-ui/v3/internal/xray"
 )
 
@@ -90,16 +88,6 @@ func appendFakeMtgLog(path, line string) {
 	}
 }
 
-// installFakeMtgAPI is installFakeMtg whose children also serve the management
-// API; it returns the pid file and the API call log.
-func installFakeMtgAPI(t *testing.T) (string, string) {
-	t.Helper()
-	pidFile := installFakeMtg(t)
-	logPath := filepath.Join(filepath.Dir(pidFile), "mtg-api.log")
-	t.Setenv("MTG_FAKE_APILOG", logPath)
-	return pidFile, logPath
-}
-
 func fakeMtgLog(t *testing.T, logPath string) []string {
 	t.Helper()
 	data, err := os.ReadFile(logPath)
@@ -122,30 +110,6 @@ func waitFakeMtgLog(t *testing.T, logPath, want string) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-}
-
-// installFakeMtg points the mtproto manager at a copy of the running test
-// binary posing as mtg (via the MTG_FAKE_CHILD gate in TestMain) and returns
-// the pid file whose line count equals the number of processes spawned so far.
-func installFakeMtg(t *testing.T) string {
-	t.Helper()
-	binDir := t.TempDir()
-	self, err := os.Executable()
-	if err != nil {
-		t.Fatalf("locate test binary: %v", err)
-	}
-	payload, err := os.ReadFile(self)
-	if err != nil {
-		t.Fatalf("read test binary: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(binDir, mtproto.GetBinaryName()), payload, 0o755); err != nil {
-		t.Fatalf("install fake mtg: %v", err)
-	}
-	pidFile := filepath.Join(binDir, "mtg-pids.txt")
-	t.Setenv("XUI_BIN_FOLDER", binDir)
-	t.Setenv("MTG_FAKE_CHILD", "1")
-	t.Setenv("MTG_FAKE_PIDFILE", pidFile)
-	return pidFile
 }
 
 func countSpawns(t *testing.T, pidFile string) int {

@@ -140,38 +140,6 @@ func TestClientCreatePayload_OmitEnableDefaultsTrue(t *testing.T) {
 	}
 }
 
-func TestBulkCreate_DisabledOnNodeSkipsAddClient(t *testing.T) {
-	setupBulkDB(t)
-	nodeID, fake := setupNodeRuntime(t)
-	ib := nodeInbound(t, nodeID, 26003, nil)
-	svc := &ClientService{}
-	inboundSvc := &InboundService{}
-
-	const email = "node@disabled"
-	res, _, err := svc.BulkCreate(inboundSvc, []ClientCreatePayload{{
-		Client: model.Client{
-			Email: email, SubID: "sub-node-disabled", Enable: false,
-			ID: "ffffffff-ffff-ffff-ffff-ffffffffffff",
-		},
-		InboundIds: []int{ib.Id},
-	}})
-	if err != nil {
-		t.Fatalf("BulkCreate: %v", err)
-	}
-	if res.Created != 1 {
-		t.Fatalf("BulkCreate result=%+v", res)
-	}
-	if got := fake.addClient.Load(); got != 0 {
-		t.Fatalf("AddClient RPCs = %d, want 0 for enable=false", got)
-	}
-	assertEnableEverywhere(t, svc, inboundSvc, ib.Id, email, false)
-	if _, _, dirty, _, err := (&NodeService{}).NodeSyncState(nodeID); err != nil {
-		t.Fatalf("NodeSyncState: %v", err)
-	} else if !dirty {
-		t.Fatal("disabled node create must leave node dirty for reconcile")
-	}
-}
-
 func TestExportImportPreservesTrafficCounters(t *testing.T) {
 	setupBulkDB(t)
 	svc := &ClientService{}

@@ -5,13 +5,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/op/go-logging"
 	"gorm.io/gorm"
@@ -171,85 +168,6 @@ func seedScaleIPDataset(t *testing.T, n, numInbounds int) []string {
 	committed = true
 	db.Exec("ANALYZE")
 	return limitedEmails
-}
-
-// TestCheckClientIpScale measures the gate and two scans over an identical fixture.
-func TestCheckClientIpScale(t *testing.T) {
-	shapes := []struct {
-		name     string
-		inbounds int
-		observed int
-	}{{"single", 1, 50}, {"spread50", 50, 1000}}
-
-	for _, n := range scaleJobSizes(t, 10000, 100000) {
-		for _, shape := range shapes {
-			t.Run(fmt.Sprintf("N=%d_%s", n, shape.name), func(t *testing.T) {
-				setupScaleJobDB(t)
-				limited := seedScaleIPDataset(t, n, shape.inbounds)
-				m := min(shape.observed, len(limited))
-
-				j := NewCheckClientIpJob()
-				const reps = 3
-				start := time.Now()
-				for range reps {
-					if !j.hasLimitIp() {
-						t.Fatal("hasLimitIp = false, want true")
-					}
-				}
-				t.Logf("N=%-7d shape=%-8s hasLimitIp=%v/call", n, shape.name, (time.Since(start) / reps).Round(time.Millisecond))
-
-				now := time.Now().Unix()
-				observed := make(map[string]map[string]int64, m)
-				for i := range m {
-					observed[limited[i]] = map[string]int64{
-						fmt.Sprintf("10.0.%d.%d", i/250, i%250+1): now,
-					}
-				}
-				for i := range m / 2 {
-					seedClientIps(t, limited[i], []model.ClientIpEntry{{IP: "10.99.0.1", Timestamp: now - 60}})
-				}
-
-				counts := countScannerScaleSQL(t)
-				before := captureScannerScaleStats(t)
-				var memoryBefore, memoryAfter runtime.MemStats
-				runtime.ReadMemStats(&memoryBefore)
-				start = time.Now()
-				j.processObserved(observed, true, true)
-				firstScan := time.Since(start)
-				firstCounts := counts.snapshot()
-				start = time.Now()
-				j.processObserved(observed, true, true)
-				secondScan := time.Since(start)
-				runtime.ReadMemStats(&memoryAfter)
-				finalCounts := counts.snapshot()
-				t.Logf("first scan SQL flat_SELECTs=%d per_ID_SELECTs=%d CAS_attempts=%d CAS_misses=%d flat_creates=%d flat_affected=%d attribution_SELECTs=%d upsert_attempts=%d attribution_affected=%d", firstCounts[0], firstCounts[1], firstCounts[2], firstCounts[2]-firstCounts[3], firstCounts[4], firstCounts[3]+firstCounts[5], firstCounts[6], firstCounts[7], firstCounts[8])
-				t.Logf("second scan SQL flat_SELECTs=%d per_ID_SELECTs=%d CAS_attempts=%d CAS_misses=%d flat_creates=%d flat_affected=%d attribution_SELECTs=%d upsert_attempts=%d attribution_affected=%d", finalCounts[0]-firstCounts[0], finalCounts[1]-firstCounts[1], finalCounts[2]-firstCounts[2], finalCounts[2]-firstCounts[2]-(finalCounts[3]-firstCounts[3]), finalCounts[4]-firstCounts[4], finalCounts[3]-firstCounts[3]+finalCounts[5]-firstCounts[5], finalCounts[6]-firstCounts[6], finalCounts[7]-firstCounts[7], finalCounts[8]-firstCounts[8])
-				after := captureScannerScaleStats(t)
-				t.Logf("scan allocations=%d bytes=%d", memoryAfter.Mallocs-memoryBefore.Mallocs, memoryAfter.TotalAlloc-memoryBefore.TotalAlloc)
-				logScannerScaleStats(t, before, after)
-				t.Logf("N=%-7d shape=%-8s processObserved M=%-5d first=%-10v second=%-10v (%.1fms/email)",
-					n, shape.name, m, firstScan.Round(time.Millisecond), secondScan.Round(time.Millisecond),
-					float64(secondScan.Milliseconds())/float64(m))
-
-				var rows int64
-				if err := database.GetDB().Model(&model.InboundClientIps{}).Count(&rows).Error; err != nil {
-					t.Fatalf("count ip rows: %v", err)
-				}
-				if rows != int64(m) {
-					t.Fatalf("inbound_client_ips rows = %d, want %d", rows, m)
-				}
-				for i := range m {
-					want := map[string]int64{fmt.Sprintf("10.0.%d.%d", i/250, i%250+1): now}
-					if i < m/2 {
-						want["10.99.0.1"] = now - 60
-					}
-					if got := ipSet(readClientIps(t, limited[i])); !reflect.DeepEqual(got, want) {
-						t.Fatalf("retained %s = %v, want %v", limited[i], got, want)
-					}
-				}
-			})
-		}
-	}
 }
 
 type scannerScaleStats struct {

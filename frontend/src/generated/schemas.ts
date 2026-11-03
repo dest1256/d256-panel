@@ -1566,36 +1566,6 @@ export const SCHEMAS: Record<string, unknown> = {
     ],
     "type": "object"
   },
-  "AmneziaWGLogs": {
-    "description": "AmneziaWGLogs is what the overview's AmneziaWG log view renders: the live\nper-peer activity of every running embedded interface, plus the panel's\nown recent AmneziaWG lifecycle log lines that explain a peer being absent\nfrom Peers at all.",
-    "properties": {
-      "events": {
-        "example": [
-          "2025/01/01 12:00:00 amneziawg: started interface awg1 for inbound 1"
-        ],
-        "items": {
-          "type": "string"
-        },
-        "type": "array"
-      },
-      "peers": {
-        "items": {
-          "$ref": "#/components/schemas/PeerActivity"
-        },
-        "type": "array"
-      },
-      "running": {
-        "example": true,
-        "type": "boolean"
-      }
-    },
-    "required": [
-      "events",
-      "peers",
-      "running"
-    ],
-    "type": "object"
-  },
   "ApiToken": {
     "properties": {
       "createdAt": {
@@ -1674,23 +1644,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "id",
       "name",
       "scope"
-    ],
-    "type": "object"
-  },
-  "Blocker": {
-    "description": "Blocker is one unmet requirement.",
-    "properties": {
-      "code": {
-        "example": "tools",
-        "type": "string"
-      },
-      "detail": {
-        "example": "awg",
-        "type": "string"
-      }
-    },
-    "required": [
-      "code"
     ],
     "type": "object"
   },
@@ -3356,15 +3309,6 @@ export const SCHEMAS: Record<string, unknown> = {
   },
   "InboundOption": {
     "properties": {
-      "awgServer": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/ServerSettings"
-          }
-        ],
-        "description": "AwgServer carries the full AmneziaWG server block (keys, subnet,\nobfuscation params) so the clients page can render a downloadable\nper-client .conf without a second round trip.",
-        "nullable": true
-      },
       "enable": {
         "example": true,
         "type": "boolean"
@@ -3608,6 +3552,13 @@ export const SCHEMAS: Record<string, unknown> = {
       "allowPrivateAddress": {
         "type": "boolean"
       },
+      "appliedVersion": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "applyError": {
+        "type": "string"
+      },
       "basePath": {
         "example": "/",
         "type": "string"
@@ -3634,6 +3585,11 @@ export const SCHEMAS: Record<string, unknown> = {
       },
       "depletedCount": {
         "example": 1,
+        "type": "integer"
+      },
+      "desiredVersion": {
+        "description": "Desired-state delivery: version/hash of the last config built for this node, the version the node\nconfirmed, and the accounting position (epoch + acknowledged sequence) of its traffic journal.",
+        "format": "int64",
         "type": "integer"
       },
       "disabledCount": {
@@ -3795,6 +3751,8 @@ export const SCHEMAS: Record<string, unknown> = {
       "activeCount",
       "address",
       "allowPrivateAddress",
+      "appliedVersion",
+      "applyError",
       "basePath",
       "clientCount",
       "configDirty",
@@ -3802,6 +3760,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "cpuPct",
       "createdAt",
       "depletedCount",
+      "desiredVersion",
       "disabledCount",
       "enable",
       "enrolledAt",
@@ -3988,98 +3947,8 @@ export const SCHEMAS: Record<string, unknown> = {
     ],
     "type": "object"
   },
-  "NodeMutationRequest": {
-    "description": "NodeMutationRequest is the node write/probe contract. ApiToken is accepted\nonly as input. On update, nil means keep the stored token; replacement and\nclearing are explicit and mutually exclusive.",
-    "properties": {
-      "address": {
-        "type": "string"
-      },
-      "allowPrivateAddress": {
-        "type": "boolean"
-      },
-      "apiToken": {
-        "nullable": true,
-        "type": "string"
-      },
-      "basePath": {
-        "type": "string"
-      },
-      "clearApiToken": {
-        "type": "boolean"
-      },
-      "enable": {
-        "type": "boolean"
-      },
-      "id": {
-        "type": "integer"
-      },
-      "inboundSyncMode": {
-        "enum": [
-          "all",
-          "selected"
-        ],
-        "type": "string"
-      },
-      "inboundTags": {
-        "items": {
-          "type": "string"
-        },
-        "type": "array"
-      },
-      "name": {
-        "type": "string"
-      },
-      "outboundTag": {
-        "type": "string"
-      },
-      "pinnedCertSha256": {
-        "type": "string"
-      },
-      "port": {
-        "maximum": 65535,
-        "minimum": 1,
-        "type": "integer"
-      },
-      "remark": {
-        "type": "string"
-      },
-      "scheme": {
-        "enum": [
-          "http",
-          "https"
-        ],
-        "type": "string"
-      },
-      "tlsVerifyMode": {
-        "enum": [
-          "verify",
-          "skip",
-          "pin",
-          "mtls"
-        ],
-        "type": "string"
-      }
-    },
-    "required": [
-      "address",
-      "allowPrivateAddress",
-      "basePath",
-      "enable",
-      "id",
-      "inboundSyncMode",
-      "inboundTags",
-      "name",
-      "outboundTag",
-      "pinnedCertSha256",
-      "port",
-      "remark",
-      "scheme",
-      "tlsVerifyMode"
-    ],
-    "type": "object"
-  },
   "NodeView": {
-    "description": "NodeView is the browser/API read contract for nodes. Credentials are\nwrite-only: responses expose only whether a node has a token configured.",
+    "description": "NodeView is the browser/API read contract for nodes.",
     "properties": {
       "activeCount": {
         "example": 20,
@@ -4089,25 +3958,16 @@ export const SCHEMAS: Record<string, unknown> = {
         "example": "node.example.com",
         "type": "string"
       },
-      "allowPrivateAddress": {
-        "example": false,
-        "type": "boolean"
+      "appliedVersion": {
+        "example": 7,
+        "format": "int64",
+        "type": "integer"
       },
-      "basePath": {
-        "example": "/",
+      "applyError": {
         "type": "string"
       },
       "clientCount": {
         "example": 25,
-        "type": "integer"
-      },
-      "configDirty": {
-        "example": false,
-        "type": "boolean"
-      },
-      "configDirtyAt": {
-        "example": 0,
-        "format": "int64",
         "type": "integer"
       },
       "cpuPct": {
@@ -4123,6 +3983,11 @@ export const SCHEMAS: Record<string, unknown> = {
         "example": 1,
         "type": "integer"
       },
+      "desiredVersion": {
+        "example": 7,
+        "format": "int64",
+        "type": "integer"
+      },
       "disabledCount": {
         "example": 2,
         "type": "integer"
@@ -4131,13 +3996,14 @@ export const SCHEMAS: Record<string, unknown> = {
         "example": true,
         "type": "boolean"
       },
+      "enrolledAt": {
+        "example": 1700000000,
+        "format": "int64",
+        "type": "integer"
+      },
       "guid": {
         "example": "node-guid",
         "type": "string"
-      },
-      "hasApiToken": {
-        "example": true,
-        "type": "boolean"
       },
       "id": {
         "example": 1,
@@ -4146,19 +4012,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "inboundCount": {
         "example": 3,
         "type": "integer"
-      },
-      "inboundSyncMode": {
-        "example": "all",
-        "type": "string"
-      },
-      "inboundTags": {
-        "example": [
-          "in-443-tcp"
-        ],
-        "items": {
-          "type": "string"
-        },
-        "type": "array"
       },
       "lastError": {
         "type": "string"
@@ -4194,43 +4047,21 @@ export const SCHEMAS: Record<string, unknown> = {
         "example": 5,
         "type": "integer"
       },
-      "outboundTag": {
-        "example": "direct",
-        "type": "string"
-      },
       "panelVersion": {
-        "example": "v3.x.x",
+        "example": "v0.1.0",
         "type": "string"
       },
-      "parentGuid": {
-        "type": "string"
-      },
-      "pinnedCertSha256": {
-        "type": "string"
-      },
-      "port": {
-        "example": 2053,
+      "protoVersion": {
+        "example": 1,
         "type": "integer"
       },
       "remark": {
         "example": "Primary edge",
         "type": "string"
       },
-      "scheme": {
-        "example": "https",
-        "type": "string"
-      },
       "status": {
         "example": "online",
         "type": "string"
-      },
-      "tlsVerifyMode": {
-        "example": "verify",
-        "type": "string"
-      },
-      "transitive": {
-        "example": false,
-        "type": "boolean"
       },
       "unavailableMetrics": {
         "items": {
@@ -4256,29 +4087,26 @@ export const SCHEMAS: Record<string, unknown> = {
         "type": "string"
       },
       "xrayVersion": {
-        "example": "25.10.31",
+        "example": "26.3.27",
         "type": "string"
       }
     },
     "required": [
       "activeCount",
       "address",
-      "allowPrivateAddress",
-      "basePath",
+      "appliedVersion",
+      "applyError",
       "clientCount",
-      "configDirty",
-      "configDirtyAt",
       "cpuPct",
       "createdAt",
       "depletedCount",
+      "desiredVersion",
       "disabledCount",
       "enable",
+      "enrolledAt",
       "guid",
-      "hasApiToken",
       "id",
       "inboundCount",
-      "inboundSyncMode",
-      "inboundTags",
       "lastError",
       "lastHeartbeat",
       "latencyMs",
@@ -4287,14 +4115,10 @@ export const SCHEMAS: Record<string, unknown> = {
       "netDown",
       "netUp",
       "onlineCount",
-      "outboundTag",
       "panelVersion",
-      "pinnedCertSha256",
-      "port",
+      "protoVersion",
       "remark",
-      "scheme",
       "status",
-      "tlsVerifyMode",
       "updatedAt",
       "uptimeSecs",
       "xrayError",
@@ -4360,161 +4184,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "finishedAt",
       "runId",
       "state"
-    ],
-    "type": "object"
-  },
-  "PeerActivity": {
-    "description": "PeerActivity is one peer's live embedded-Device-reported state, the\ncounterpart of an Xray access-log entry: a tunnel logs no requests, only\nhandshakes and bytes.",
-    "properties": {
-      "allowedIPs": {
-        "example": "10.8.1.2/32",
-        "type": "string"
-      },
-      "down": {
-        "example": 4194304,
-        "format": "int64",
-        "type": "integer"
-      },
-      "email": {
-        "example": "peer@example.com",
-        "type": "string"
-      },
-      "endpoint": {
-        "example": "203.0.113.9:51820",
-        "type": "string"
-      },
-      "handshake": {
-        "description": "Handshake is unix milliseconds, 0 when the peer has never connected.",
-        "example": 1735732800000,
-        "format": "int64",
-        "type": "integer"
-      },
-      "inboundId": {
-        "example": 1,
-        "type": "integer"
-      },
-      "interface": {
-        "example": "awg1",
-        "type": "string"
-      },
-      "online": {
-        "example": true,
-        "type": "boolean"
-      },
-      "tag": {
-        "example": "inbound-51820",
-        "type": "string"
-      },
-      "up": {
-        "example": 1048576,
-        "format": "int64",
-        "type": "integer"
-      }
-    },
-    "required": [
-      "allowedIPs",
-      "down",
-      "email",
-      "endpoint",
-      "handshake",
-      "inboundId",
-      "interface",
-      "online",
-      "tag",
-      "up"
-    ],
-    "type": "object"
-  },
-  "ProbeResultUI": {
-    "properties": {
-      "cpuPct": {
-        "example": 12.5,
-        "type": "number"
-      },
-      "error": {
-        "type": "string"
-      },
-      "latencyMs": {
-        "example": 42,
-        "type": "integer"
-      },
-      "memPct": {
-        "example": 45.2,
-        "type": "number"
-      },
-      "panelVersion": {
-        "example": "v3.x.x",
-        "type": "string"
-      },
-      "status": {
-        "example": "online",
-        "type": "string"
-      },
-      "unavailableMetrics": {
-        "items": {
-          "type": "string"
-        },
-        "type": "array"
-      },
-      "uptimeSecs": {
-        "example": 86400,
-        "format": "int64",
-        "type": "integer"
-      },
-      "xrayError": {
-        "type": "string"
-      },
-      "xrayState": {
-        "description": "XrayState/XrayError are populated on successful probes even when the node's\nXray core is not healthy. The UI uses them for a distinct \"panel ok, xray failed\" indicator.",
-        "type": "string"
-      },
-      "xrayVersion": {
-        "example": "25.10.31",
-        "type": "string"
-      }
-    },
-    "required": [
-      "cpuPct",
-      "error",
-      "latencyMs",
-      "memPct",
-      "panelVersion",
-      "status",
-      "uptimeSecs",
-      "xrayError",
-      "xrayState",
-      "xrayVersion"
-    ],
-    "type": "object"
-  },
-  "Readiness": {
-    "description": "Readiness is the host's ability to run any kernel-mode inbound at all.",
-    "properties": {
-      "blockers": {
-        "example": [
-          {
-            "code": "tools",
-            "detail": "awg"
-          }
-        ],
-        "items": {
-          "$ref": "#/components/schemas/Blocker"
-        },
-        "type": "array"
-      },
-      "installCommand": {
-        "example": "sudo /usr/local/x-ui/x-ui install-awg-kernel",
-        "type": "string"
-      },
-      "ready": {
-        "example": false,
-        "type": "boolean"
-      }
-    },
-    "required": [
-      "blockers",
-      "installCommand",
-      "ready"
     ],
     "type": "object"
   },
@@ -4634,154 +4303,6 @@ export const SCHEMAS: Record<string, unknown> = {
     ],
     "type": "object"
   },
-  "ServerSettings": {
-    "description": "ServerSettings is the \"server\" block of an AmneziaWG inbound's Settings\nJSON: the interface-level configuration shared by every client/peer. The\nlisten port is deliberately not duplicated here — it lives on the inbound\nrow itself (Inbound.Port), like every other protocol.",
-    "properties": {
-      "contentPaddingAddition": {
-        "type": "string"
-      },
-      "disableCookies": {
-        "type": "boolean"
-      },
-      "externalInterface": {
-        "description": "ExternalInterface, IPv6Enabled, and IPv6ExternalInterface are live\nagain as of Phase 3.5 -- see the matching fields on Instance for what\nthey gate (internal/amneziawgnet's IPv6-address-alias mechanism).\nIPv6Subnet was never actually vestigial either: InstanceFromInbound\nalready consumes it (via serverAddressV6) to build the server's own\ntunnel address, same as always. Only RouteThroughXray, below, remains\ngenuinely vestigial as of the hard cutover to the embedded path\n(internal/amneziawgnet) -- read from existing stored settings for\nbackward compatibility, but not acted on by anything.",
-        "type": "string"
-      },
-      "h1": {
-        "type": "string"
-      },
-      "h2": {
-        "type": "string"
-      },
-      "h3": {
-        "type": "string"
-      },
-      "h4": {
-        "type": "string"
-      },
-      "headerProtectionKey": {
-        "description": "HeaderProtectionKey and ContentPaddingAddition are AmneziaWG 3.0\nfields, flat and top-level for the same tools/openapigen reason as\nthe block above; Obfuscation() below folds them back into\nObfuscation31's own identically named fields.\nHeaderProtectionKey is a base64 32-byte key; empty (the default)\ndisables AWG 3.0 header protection. A non-empty value requires\nevery one of S1-S4 above to be \u003e= 12 -- ValidateObfuscation\nenforces this at save time, not just at IpcSet time.\nContentPaddingAddition is a \"low-high\" range or bare integer, the\nsame grammar and uint32 cap as H1-H4.",
-        "type": "string"
-      },
-      "i1": {
-        "type": "string"
-      },
-      "i2": {
-        "type": "string"
-      },
-      "i3": {
-        "type": "string"
-      },
-      "i4": {
-        "type": "string"
-      },
-      "i5": {
-        "type": "string"
-      },
-      "ipv6Enabled": {
-        "type": "boolean"
-      },
-      "ipv6ExternalInterface": {
-        "type": "string"
-      },
-      "ipv6Subnet": {
-        "type": "string"
-      },
-      "jc": {
-        "description": "Obfuscation31's fields, repeated flat (not embedded) rather than\nnested under their own key: encoding/json would happily inline an\nembedded Obfuscation31 the same way, but the frontend's Go-\u003eZod/TS\ngenerator (tools/openapigen) does not — it emits a genuinely nested\n`obfuscation31` object, which would silently diverge from the real\nwire JSON. See Obfuscation() below for the manager-facing conversion.",
-        "type": "integer"
-      },
-      "jmax": {
-        "type": "integer"
-      },
-      "jmin": {
-        "type": "integer"
-      },
-      "keepaliveTimeout": {
-        "type": "string"
-      },
-      "kernelMode": {
-        "description": "KernelMode runs this inbound on the AmneziaWG kernel module (internal/amneziawgkern)\ninstead of the embedded amneziawg-go + gVisor stack.",
-        "type": "boolean"
-      },
-      "maxHandshakeAttempts": {
-        "type": "string"
-      },
-      "mtu": {
-        "type": "integer"
-      },
-      "primaryDns": {
-        "description": "PrimaryDNS/SecondaryDNS seed client configs' DNS line. Blank is\nmeaningful, so no omitempty: a dropped key resurrects frontend defaults.",
-        "type": "string"
-      },
-      "privateKey": {
-        "type": "string"
-      },
-      "publicKey": {
-        "type": "string"
-      },
-      "randomTrailers": {
-        "description": "RandomTrailers/DisableCookies mirror Instance's identically named\nAmneziaWG 3.1 fields -- see that type's own doc comment for the real\nprotocol/interop details. Both real bool fields (not omitempty):\nbuildUAPIConfig always emits both lines explicitly so the\nreconfigure-in-place diff correctly notices a true-\u003efalse edit, not\njust false-\u003etrue.",
-        "type": "boolean"
-      },
-      "rejectAfterTime": {
-        "type": "string"
-      },
-      "rekeyAfterTime": {
-        "description": "RekeyAfterTime/RekeyTimeout/RejectAfterTime/KeepaliveTimeout/\nMaxHandshakeAttempts mirror Instance's identically named fields --\nsee that type's own doc comment for the grammar/width/real-default\ndetails. Flat and top-level for the same tools/openapigen reason as\nthe rest of this struct.",
-        "type": "string"
-      },
-      "rekeyTimeout": {
-        "type": "string"
-      },
-      "routeThroughXray": {
-        "type": "boolean"
-      },
-      "s1": {
-        "type": "integer"
-      },
-      "s2": {
-        "type": "integer"
-      },
-      "s3": {
-        "type": "integer"
-      },
-      "s4": {
-        "type": "integer"
-      },
-      "secondaryDns": {
-        "type": "string"
-      },
-      "subnetCidr": {
-        "type": "integer"
-      },
-      "subnetIp": {
-        "type": "string"
-      }
-    },
-    "required": [
-      "disableCookies",
-      "h1",
-      "h2",
-      "h3",
-      "h4",
-      "jc",
-      "jmax",
-      "jmin",
-      "primaryDns",
-      "privateKey",
-      "publicKey",
-      "randomTrailers",
-      "s1",
-      "s2",
-      "s3",
-      "s4",
-      "secondaryDns",
-      "subnetCidr",
-      "subnetIp"
-    ],
-    "type": "object"
-  },
   "Setting": {
     "description": "Setting stores key-value configuration settings for the 3x-ui panel.",
     "properties": {
@@ -4799,90 +4320,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "id",
       "key",
       "value"
-    ],
-    "type": "object"
-  },
-  "Sponsor": {
-    "description": "Sponsor is one paid placement published in the repo's sponsors.json.",
-    "properties": {
-      "enable": {
-        "example": true,
-        "nullable": true,
-        "type": "boolean"
-      },
-      "from": {
-        "example": "2026-10-01T00:00:00Z",
-        "format": "date-time",
-        "nullable": true,
-        "type": "string"
-      },
-      "id": {
-        "example": "acme-2026-10",
-        "type": "string"
-      },
-      "link": {
-        "example": "https://acme.example/?utm_source=3x-ui",
-        "type": "string"
-      },
-      "logo": {
-        "example": "/sponsors/logo/acme.png",
-        "type": "string"
-      },
-      "name": {
-        "example": "Acme VPS",
-        "type": "string"
-      },
-      "slots": {
-        "items": {
-          "type": "string"
-        },
-        "type": "array"
-      },
-      "text": {
-        "additionalProperties": {
-          "type": "string"
-        },
-        "type": "object"
-      },
-      "title": {
-        "additionalProperties": {
-          "type": "string"
-        },
-        "type": "object"
-      },
-      "until": {
-        "example": "2026-11-01T00:00:00Z",
-        "format": "date-time",
-        "type": "string"
-      }
-    },
-    "required": [
-      "id",
-      "link",
-      "name",
-      "slots",
-      "text",
-      "title",
-      "until"
-    ],
-    "type": "object"
-  },
-  "SponsorList": {
-    "description": "SponsorList is the active sponsor set plus the contact link for new sponsors.",
-    "properties": {
-      "contact": {
-        "example": "https://t.me/example",
-        "type": "string"
-      },
-      "sponsors": {
-        "items": {
-          "$ref": "#/components/schemas/Sponsor"
-        },
-        "type": "array"
-      }
-    },
-    "required": [
-      "sponsors"
     ],
     "type": "object"
   },
@@ -4955,35 +4392,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "sortOrder",
       "strategy",
       "updatedAt"
-    ],
-    "type": "object"
-  },
-  "TgBotCapabilities": {
-    "description": "TgBotCapabilities is the browser-safe shape of the bot's own capabilities.",
-    "properties": {
-      "groupPrivacy": {
-        "description": "GroupPrivacy off means the bot reads every group message; when it is on,\na bare /start in a group is invisible to the bot.",
-        "example": false,
-        "type": "boolean"
-      },
-      "inlineEnabled": {
-        "example": true,
-        "type": "boolean"
-      },
-      "running": {
-        "example": true,
-        "type": "boolean"
-      },
-      "username": {
-        "example": "xui_bot",
-        "type": "string"
-      }
-    },
-    "required": [
-      "groupPrivacy",
-      "inlineEnabled",
-      "running",
-      "username"
     ],
     "type": "object"
   },

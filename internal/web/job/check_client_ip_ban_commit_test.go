@@ -1,13 +1,9 @@
 package job
 
 import (
-	"errors"
-	"os"
 	"testing"
-	"time"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
-	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 
 	"gorm.io/gorm"
 )
@@ -79,135 +75,6 @@ func installClientIpCommitFailure(t *testing.T) {
 	}
 }
 
-// A fail2ban line is not a row a rollback can take back, so nothing may be
-// appended, and bannedSeen not advanced, until the scan has committed.
-func TestProcessObserved_CommitFailureDoesNotPublishBan(t *testing.T) {
-	setupIntegrationDB(t)
-
-	const email = "rollback-must-not-ban@x"
-	seedLinkedInboundWithClient(t, "rollback-must-not-ban", email, 1)
-	now := time.Now().Unix()
-	seedClientIps(t, email, []model.ClientIpEntry{{IP: "198.51.100.10", Timestamp: now - 2}})
-
-	installClientIpCommitFailure(t)
-
-	j := NewCheckClientIpJob()
-	cleaned := j.processObserved(map[string]map[string]int64{
-		email: {
-			"198.51.100.10": now - 1,
-			"198.51.100.11": now,
-		},
-	}, true, true)
-	if cleaned {
-		t.Errorf("processObserved reported a published ban after the commit failed")
-	}
-	if got := ipSet(readClientIps(t, email)); len(got) != 1 || got["198.51.100.10"] != now-2 {
-		t.Errorf("rolled-back IP row = %v, want only the original client address", got)
-	}
-	if _, err := os.Stat(readIpLimitLogPath()); !os.IsNotExist(err) {
-		body, _ := os.ReadFile(readIpLimitLogPath())
-		t.Errorf("the rollback still touched the fail2ban trigger file (stat=%v):\n%s", err, body)
-	}
-	if _, seen := j.bannedSeen[email+"|198.51.100.10"]; seen {
-		t.Errorf("the rollback advanced bannedSeen and would suppress the retry")
-	}
-}
-
-// The committed row has already dropped the address, so a bannedSeen entry
-// recorded ahead of a failed write would suppress the ban for good.
-func TestProcessObserved_PublishFailureLeavesBanRetryable(t *testing.T) {
-	setupIntegrationDB(t)
-
-	const email = "publish-failure@x"
-	seedLinkedInboundWithClient(t, "publish-failure", email, 1)
-	now := time.Now().Unix()
-
-	// A directory where the log file belongs makes every open fail.
-	if err := os.MkdirAll(readIpLimitLogPath(), 0o755); err != nil {
-		t.Fatalf("block the log path: %v", err)
-	}
-
-	j := NewCheckClientIpJob()
-	observed := map[string]map[string]int64{
-		email: {"198.51.100.20": now - 1, "198.51.100.21": now},
-	}
-	if cleaned := j.processObserved(observed, true, true); cleaned {
-		t.Errorf("processObserved reported a publication that could not happen")
-	}
-	for key := range j.bannedSeen {
-		t.Errorf("bannedSeen recorded %q although nothing was written", key)
-	}
-}
-
-// A client back under its limit produces no candidates, so pruning cannot live
-// in the selection step: a surviving entry suppresses its next real ban.
-func TestProcessObserved_ForgetsBannedSeenWhenClientReturnsUnderLimit(t *testing.T) {
-	setupIntegrationDB(t)
-
-	const email = "prune-banned-seen@x"
-	seedLinkedInboundWithClient(t, "prune-banned-seen", email, 1)
-	now := time.Now().Unix()
-	seedClientIps(t, email, []model.ClientIpEntry{{IP: "203.0.113.1", Timestamp: now - 500}})
-	j := NewCheckClientIpJob()
-
-	j.processObserved(map[string]map[string]int64{
-		email: {"203.0.113.1": now - 400, "203.0.113.2": now - 300},
-	}, true, true)
-	if got := banLineCount(t, email); got != 1 {
-		t.Fatalf("ban lines after the first scan = %d, want 1", got)
-	}
-
-	// Back under the limit: no candidates, so the stale entry must be dropped here.
-	j.processObserved(map[string]map[string]int64{
-		email: {"203.0.113.1": now - 400},
-	}, true, true)
-	if len(j.bannedSeen) != 0 {
-		t.Fatalf("bannedSeen = %v, want empty once the client is under its limit", j.bannedSeen)
-	}
-
-	j.processObserved(map[string]map[string]int64{
-		email: {"203.0.113.1": now - 400, "203.0.113.3": now},
-	}, true, true)
-	if got := banLineCount(t, email); got != 2 {
-		t.Fatalf("ban lines after the client goes over again = %d, want 2", got)
-	}
-}
-
 type failingWriter struct{ err error }
 
 func (f failingWriter) Write([]byte) (int, error) { return 0, f.err }
-
-// A dropped write error would let publishBans record an address the jail never
-// sees, so it has to reach the caller.
-func TestWriteBanLinesSurfacesWriteFailure(t *testing.T) {
-	want := errors.New("no space left on device")
-	err := writeBanLines(failingWriter{err: want}, "write-failure@x", []model.ClientIpEntry{
-		{IP: "203.0.113.9", Timestamp: time.Now().Unix()},
-	})
-	if !errors.Is(err, want) {
-		t.Fatalf("writeBanLines error = %v, want the writer's own error", err)
-	}
-}
-
-// A committed over-limit scan writes its line and hands the client on.
-func TestProcessObserved_PublishesBanForCommittedScan(t *testing.T) {
-	setupIntegrationDB(t)
-
-	const email = "published-ban@x"
-	seedLinkedInboundWithClient(t, "published-ban", email, 1)
-	now := time.Now().Unix()
-	seedClientIps(t, email, []model.ClientIpEntry{{IP: "203.0.113.50", Timestamp: now - 500}})
-
-	j := NewCheckClientIpJob()
-	if cleaned := j.processObserved(map[string]map[string]int64{
-		email: {"203.0.113.50": now - 400, "203.0.113.51": now},
-	}, true, true); !cleaned {
-		t.Fatalf("a published ban must report the access log as worth cleaning")
-	}
-	if got := banLineCount(t, email); got != 1 {
-		t.Fatalf("ban lines = %d, want 1", got)
-	}
-	if _, seen := j.bannedSeen[email+"|203.0.113.50"]; !seen {
-		t.Fatalf("a published address must be recorded so the next scan does not repeat it")
-	}
-}

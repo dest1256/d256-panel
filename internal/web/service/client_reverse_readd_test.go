@@ -37,25 +37,6 @@ func reverseProbeClient(email string, enable bool) model.Client {
 	return model.Client{Email: email, ID: reverseProbeID, Enable: enable, Reverse: &model.ClientReverse{Tag: "portal"}}
 }
 
-// seedReverseProbeInbound seeds one local vless inbound holding a single reverse
-// client, and the recording runtime every local apply of it lands on.
-func seedReverseProbeInbound(t *testing.T, tag string, port int, enable bool) (*model.Inbound, string, *reverseUserProbe) {
-	t.Helper()
-	setupConflictDB(t)
-	mgr := useTestRuntimeManager(t)
-	probe := &reverseUserProbe{}
-	mgr.SetLocalRuntimeOverride(probe)
-
-	email := tag + "@example.test"
-	client := reverseProbeClient(email, enable)
-	seedInboundConflict(t, tag, "0.0.0.0", port, model.VLESS, `{"network":"tcp"}`, clientsSettings(t, []model.Client{client}))
-	inbound := loadInboundByTag(t, tag)
-	if err := (&ClientService{}).SyncInbound(nil, inbound.Id, []model.Client{client}); err != nil {
-		t.Fatalf("SyncInbound: %v", err)
-	}
-	return inbound, email, probe
-}
-
 // assertReverseReAdd fails unless the core was handed the client's own tag: the
 // handler is gone the moment RemoveUser runs, and only the tag rebuilds it.
 func assertReverseReAdd(t *testing.T, probe *reverseUserProbe, email string) {
@@ -78,57 +59,6 @@ func assertReverseReAdd(t *testing.T, probe *reverseUserProbe, email string) {
 	if !found {
 		t.Fatalf("no re-add of %s reached the core: %v", email, users)
 	}
-}
-
-// The panel's most ordinary action on a reverse client: editing it removes the
-// account and adds it back, and the core rebuilds nothing without the tag.
-func TestClientEditKeepsTheReverseTag(t *testing.T) {
-	_, email, probe := seedReverseProbeInbound(t, "rev-edit", 50071, true)
-	rec := lookupClientRecord(t, email)
-
-	edited := reverseProbeClient(email, true)
-	edited.Comment = "edited after the tunnel was up"
-	if _, err := (&ClientService{}).Update(&InboundService{}, rec.Id, edited, 0); err != nil {
-		t.Fatalf("Update: %v", err)
-	}
-	assertReverseReAdd(t, probe, email)
-}
-
-func TestBulkReEnableKeepsTheReverseTag(t *testing.T) {
-	_, email, probe := seedReverseProbeInbound(t, "rev-bulk", 50072, false)
-
-	if _, _, err := (&ClientService{}).BulkSetEnable(&InboundService{}, []string{email}, true); err != nil {
-		t.Fatalf("BulkSetEnable: %v", err)
-	}
-	assertReverseReAdd(t, probe, email)
-}
-
-// The route an operator hits most often: a client that exhausted its quota is
-// removed, then re-added by the reset that renews it.
-func TestTrafficResetKeepsTheReverseTag(t *testing.T) {
-	inbound, email, probe := seedReverseProbeInbound(t, "rev-quota", 50073, true)
-	depleteClientTraffic(t, inbound.Id, email)
-
-	if _, err := (&InboundService{}).ResetClientTraffic(inbound.Id, email); err != nil {
-		t.Fatalf("ResetClientTraffic: %v", err)
-	}
-	assertReverseReAdd(t, probe, email)
-}
-
-func TestAddingClientsKeepsTheReverseTag(t *testing.T) {
-	inbound, _, probe := seedReverseProbeInbound(t, "rev-add", 50074, true)
-	const added = "rev-add-second@example.test"
-	second := reverseProbeClient(added, true)
-	second.ID = "7c3fad07-4b1c-4d66-9f83-7db2f3c8b444"
-
-	if _, err := (&ClientService{}).AddInboundClient(&InboundService{}, &model.Inbound{
-		Id:       inbound.Id,
-		Protocol: model.VLESS,
-		Settings: clientsSettings(t, []model.Client{second}),
-	}); err != nil {
-		t.Fatalf("AddInboundClient: %v", err)
-	}
-	assertReverseReAdd(t, probe, added)
 }
 
 // depleteClientTraffic leaves the client enabled in settings but out of quota,

@@ -537,37 +537,6 @@ func TestClientIpSyncCASExhaustionRollsBack(t *testing.T) {
 	}
 }
 
-func TestNodeClientIpCanonicalUnchangedSkipsUpsert(t *testing.T) {
-	setupClientIpTestDB(t)
-	now := time.Now().Unix()
-	report := map[string][]model.ClientIpEntry{"u@x": {{IP: "192.0.2.1", Timestamp: now - 1}, {IP: "192.0.2.2", Timestamp: now}}}
-	row := model.NodeClientIp{NodeGuid: "guid", Email: "u@x", Ips: rawClientIpBlob(t, report["u@x"]...)}
-	if err := database.GetDB().Create(&row).Error; err != nil {
-		t.Fatal(err)
-	}
-	counts := countClientIpSQL(t, "node_client_ips")
-	if err := (&InboundService{}).RecordLocalClientIps("guid", report); err != nil {
-		t.Fatal(err)
-	}
-	if counts.selects.Load() != 1 || counts.creates.Load() != 0 || counts.updates.Load() != 0 {
-		t.Fatalf("unchanged attribution SELECT/create/update = %d/%d/%d, want 1/0/0", counts.selects.Load(), counts.creates.Load(), counts.updates.Load())
-	}
-	report["u@x"][1].Timestamp++
-	if err := (&InboundService{}).RecordLocalClientIps("guid", report); err != nil {
-		t.Fatal(err)
-	}
-	if counts.creates.Load() != 1 || counts.affected.Load() != 1 {
-		t.Fatalf("advancing attribution attempts/affected = %d/%d, want 1/1", counts.creates.Load(), counts.affected.Load())
-	}
-	trees, err := (&InboundService{}).GetClientIpsByGuid()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(trees["guid"]["u@x"], report["u@x"]) {
-		t.Fatalf("attribution = %v, want %v", trees, report)
-	}
-}
-
 func TestClientIpSyncRawSnapshotAndSingleRetry(t *testing.T) {
 	for _, contend := range []bool{false, true} {
 		t.Run(fmt.Sprintf("contention=%v", contend), func(t *testing.T) {

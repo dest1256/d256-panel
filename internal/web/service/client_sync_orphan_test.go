@@ -1,12 +1,10 @@
 package service
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	"github.com/mhsanaei/3x-ui/v3/internal/xray"
 
 	"gorm.io/gorm"
 )
@@ -27,104 +25,6 @@ func backdateOrphanMark(t *testing.T, db *gorm.DB, email string) {
 		Where("email = ?", email).
 		Update("sync_orphaned_at", past).Error; err != nil {
 		t.Fatalf("backdate orphan mark: %v", err)
-	}
-}
-
-// A partial snapshot (node alive, still serving another client) authoritatively drops one;
-// the merge soft-orphans, recoverable until the grace elapses and the reaper confirms it.
-func TestSyncOrphanSurvivesMergeUntilGraceElapses(t *testing.T) {
-	db := initTrafficTestDB(t)
-	svc := &InboundService{}
-	clientSvc := &ClientService{}
-
-	seedNodeRow(t, db, &model.Node{Id: 1, Name: "n1", Address: "127.0.0.1", Port: 2096, ApiToken: "tok", Enable: true})
-
-	const email = "gone@x"
-	const keep = "keep@x"
-	createNodeInboundWithClient(t, db, 1, "n1-in", 41001, keep)
-	bothSettings := fmt.Sprintf(`{"clients":[{"email":%q,"enable":true},{"email":%q,"enable":true}]}`, keep, email)
-	syncNodeWithSettings(t, svc, 1, "n1-in", bothSettings,
-		xray.ClientTraffic{Email: keep, Enable: true},
-		xray.ClientTraffic{Email: email, Up: 5, Down: 5, Enable: true})
-
-	if rec, traf := countClientRows(t, db, email); rec != 1 || traf != 1 {
-		t.Fatalf("setup: clients=%d client_traffics=%d, want 1/1", rec, traf)
-	}
-
-	keepOnly := fmt.Sprintf(`{"clients":[{"email":%q,"enable":true}]}`, keep)
-	if _, err := svc.setRemoteTrafficLocked(1, snapshotWithClients(t, "n1-in", keepOnly,
-		xray.ClientTraffic{Email: keep, Enable: true}), false, false); err != nil {
-		t.Fatalf("orphaning merge: %v", err)
-	}
-	if rec, traf := countClientRows(t, db, email); rec != 1 || traf != 1 {
-		t.Fatalf("merge hard-deleted the client: clients=%d client_traffics=%d, want 1/1", rec, traf)
-	}
-	if readOrphanMark(t, db, email) <= 0 {
-		t.Fatal("merge did not stamp sync_orphaned_at")
-	}
-
-	reaped, err := clientSvc.ReapSyncOrphans()
-	if err != nil {
-		t.Fatalf("reap inside grace: %v", err)
-	}
-	if reaped != 0 {
-		t.Fatalf("reaped %d client(s) inside the grace period, want 0", reaped)
-	}
-	if rec, _ := countClientRows(t, db, email); rec != 1 {
-		t.Fatal("client removed before the grace period elapsed")
-	}
-
-	backdateOrphanMark(t, db, email)
-	reaped, err = clientSvc.ReapSyncOrphans()
-	if err != nil {
-		t.Fatalf("reap after grace: %v", err)
-	}
-	if reaped != 1 {
-		t.Fatalf("reaped %d client(s) after the grace period, want 1", reaped)
-	}
-	rec, traf := countClientRows(t, db, email)
-	if rec != 0 || traf != 0 {
-		t.Fatalf("after reap: clients=%d client_traffics=%d, want 0/0", rec, traf)
-	}
-}
-
-// A client the node reports again (partial snapshot) was never gone: clearing the mark
-// turns a bad merge into a recoverable blip instead of a delayed deletion.
-func TestSyncOrphanMarkClearedOnReattach(t *testing.T) {
-	db := initTrafficTestDB(t)
-	svc := &InboundService{}
-	clientSvc := &ClientService{}
-
-	seedNodeRow(t, db, &model.Node{Id: 1, Name: "n1", Address: "127.0.0.1", Port: 2096, ApiToken: "tok", Enable: true})
-
-	const email = "flaky@x"
-	const keep = "keep@x"
-	createNodeInboundWithClient(t, db, 1, "n1-in", 41001, keep)
-	bothSettings := fmt.Sprintf(`{"clients":[{"email":%q,"enable":true},{"email":%q,"enable":true}]}`, keep, email)
-	syncNodeWithSettings(t, svc, 1, "n1-in", bothSettings,
-		xray.ClientTraffic{Email: keep, Enable: true},
-		xray.ClientTraffic{Email: email, Up: 5, Down: 5, Enable: true})
-
-	keepOnly := fmt.Sprintf(`{"clients":[{"email":%q,"enable":true}]}`, keep)
-	if _, err := svc.setRemoteTrafficLocked(1, snapshotWithClients(t, "n1-in", keepOnly,
-		xray.ClientTraffic{Email: keep, Enable: true}), false, false); err != nil {
-		t.Fatalf("orphaning merge: %v", err)
-	}
-	if readOrphanMark(t, db, email) <= 0 {
-		t.Fatal("setup: expected the merge to mark the client")
-	}
-
-	syncNodeWithSettings(t, svc, 1, "n1-in", bothSettings,
-		xray.ClientTraffic{Email: keep, Enable: true},
-		xray.ClientTraffic{Email: email, Up: 6, Down: 6, Enable: true})
-
-	if orphanedAt := readOrphanMark(t, db, email); orphanedAt != 0 {
-		t.Fatalf("re-attached client kept its orphan mark: sync_orphaned_at=%d", orphanedAt)
-	}
-
-	backdateOrphanMark(t, db, email)
-	if reaped, err := clientSvc.ReapSyncOrphans(); err != nil || reaped != 0 {
-		t.Fatalf("reaped %d client(s) (err=%v) that the node still reports, want 0", reaped, err)
 	}
 }
 

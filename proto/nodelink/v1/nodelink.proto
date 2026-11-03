@@ -88,6 +88,8 @@ message XrayStatus {
   string error = 2;
   string version = 3;
   uint64 applied_state_version = 4;
+  // Emails of users with a live connection (capped at 5000).
+  repeated string online_users = 5;
 }
 
 // DesiredState is everything the node must run. The panel is the only builder; the node applies it

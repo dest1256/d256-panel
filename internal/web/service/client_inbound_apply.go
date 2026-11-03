@@ -8,8 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/amneziawg"
-	"github.com/mhsanaei/3x-ui/v3/internal/amneziawgkern"
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
@@ -31,44 +29,8 @@ func droppedClientNeedsRestart() bool {
 	return on
 }
 
-func validateAmneziaWGClientWrite(inbound *model.Inbound, clients []model.Client) error {
-	if inbound.Protocol != model.AmneziaWG {
-		return nil
-	}
-	var settings amneziawg.InboundSettings
-	if err := json.Unmarshal([]byte(inbound.Settings), &settings); err != nil {
-		return fmt.Errorf("amneziawg: invalid settings: %w", err)
-	}
-	for _, client := range clients {
-		for _, value := range []struct{ field, value string }{
-			{"email", client.Email},
-			{"publicKey", client.PublicKey},
-			{"preSharedKey", client.PreSharedKey},
-		} {
-			if err := amneziawg.ValidateConfigValue(value.field, value.value); err != nil {
-				return fmt.Errorf("amneziawg: client %q: %w", client.Email, err)
-			}
-		}
-		for _, allowedIP := range client.AllowedIPs {
-			if err := amneziawg.ValidateConfigValue("allowedIPs", allowedIP); err != nil {
-				return fmt.Errorf("amneziawg: client %q: %w", client.Email, err)
-			}
-		}
-	}
-	if settings.Server == nil || !settings.Server.KernelMode {
-		return nil
-	}
-	inst := amneziawg.Instance{Listen: inbound.Listen, IPv6Enabled: settings.Server.IPv6Enabled}
-	for _, client := range clients {
-		inst.Peers = append(inst.Peers, amneziawg.Peer{
-			AllowedIPs: client.AllowedIPs, ForwardedPorts: client.ForwardedPorts,
-		})
-	}
-	if err := amneziawgkern.ValidateInstanceFeatures(inst, settings.Server.RouteThroughXray); err != nil {
-		return err
-	}
-	return nil
-}
+// AmneziaWG inbounds are not supported; kept as a no-op until the call sites are removed.
+func validateAmneziaWGClientWrite(*model.Inbound, []model.Client) error { return nil }
 
 func sameClientConfigExceptUpdatedAt(a, b map[string]any) bool {
 	aa := maps.Clone(a)
@@ -83,15 +45,6 @@ func sameClientConfigExceptUpdatedAt(a, b map[string]any) bool {
 // advancePushedInbound advances the node's reconcile-skip fingerprint to what the
 // per-client pushes delivered, not the saved settings a traffic tick may have extended.
 func advancePushedInbound(rt runtime.Runtime, prevSettings, pushedSettings string, ib *model.Inbound) {
-	rem, ok := rt.(*runtime.Remote)
-	if !ok {
-		return
-	}
-	prev := *ib
-	prev.Settings = prevSettings
-	pushed := *ib
-	pushed.Settings = pushedSettings
-	rem.AdvancePushedInbound(&prev, &pushed)
 }
 
 // delInboundClients removes several clients from a single inbound in one pass:

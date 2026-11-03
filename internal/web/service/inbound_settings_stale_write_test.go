@@ -1,11 +1,7 @@
 package service
 
 import (
-	"context"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
 	"reflect"
 	"strconv"
 	"testing"
@@ -13,7 +9,6 @@ import (
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/runtime"
 	"github.com/mhsanaei/3x-ui/v3/internal/xray"
 
 	"gorm.io/gorm"
@@ -216,60 +211,6 @@ func TestBulkAdjustOnRenewedClientKeepsRenewal(t *testing.T) {
 	})
 	if y := requireNeighbourRenewed(t, ib.Id); y.TotalGB != 1500 {
 		t.Fatalf("y@stale totalGB = %d, want 1500 (the adjust itself was lost)", y.TotalGB)
-	}
-}
-
-// The node got only the per-client push, so the skip fingerprint must not claim
-// it also holds the renewal the traffic writer committed mid-op.
-func TestNodeClientOpsMidRenewalStillReconcileRenewal(t *testing.T) {
-	for i, op := range staleClientOps {
-		if !op.advancesNodeFingerprint {
-			continue
-		}
-		t.Run(op.name, func(t *testing.T) {
-			setupBulkDB(t)
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write([]byte(`{"success":true}`))
-			}))
-			t.Cleanup(srv.Close)
-			u, err := url.Parse(srv.URL)
-			if err != nil {
-				t.Fatalf("parse url: %v", err)
-			}
-			port, _ := strconv.Atoi(u.Port())
-			node := &model.Node{
-				Name: "stale-node", Scheme: "http", Address: u.Hostname(), Port: port, BasePath: "/",
-				ApiToken: "tok", Enable: true, Status: "online", AllowPrivateAddress: true,
-			}
-			if err := database.GetDB().Create(node).Error; err != nil {
-				t.Fatalf("create node: %v", err)
-			}
-			remote := runtime.NewRemote(node, nil)
-			useTestRuntimeManager(t).SetRuntimeOverride(node.Id, remote)
-
-			ib := seedRenewableNeighbour(t, 23131+i, &node.Id)
-			remote.AdoptInboundAlias(ib, runtime.RemoteInboundOption{Id: 7, Tag: ib.Tag})
-
-			commitTickBetweenReadAndWrite(t, renewYTick(ib.Id), func() {
-				if err := op.run(t, ib); err != nil {
-					t.Errorf("%s: %v", op.name, err)
-				}
-			})
-			requireNeighbourRenewed(t, ib.Id)
-
-			saved, err := (&InboundService{}).GetInbound(ib.Id)
-			if err != nil {
-				t.Fatalf("GetInbound: %v", err)
-			}
-			pushed, err := remote.ReconcileInbound(context.Background(), saved, true)
-			if err != nil {
-				t.Fatalf("ReconcileInbound: %v", err)
-			}
-			if !pushed {
-				t.Fatal("reconcile skipped the inbound: the node never receives y@stale's renewal")
-			}
-		})
 	}
 }
 

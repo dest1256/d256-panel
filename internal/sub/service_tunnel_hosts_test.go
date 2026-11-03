@@ -64,34 +64,3 @@ func TestGetSubs_WireGuardAdvertisesHostEndpoints(t *testing.T) {
 		}
 	}
 }
-
-// The AmneziaWG vpn:// payload carries the endpoint inside its .conf text, so a
-// Host must reach the Endpoint line and the remark comment, not only the URL.
-func TestGetSubs_AmneziaWGAdvertisesHostEndpoint(t *testing.T) {
-	initSubDB(t)
-	serverPriv, serverPub := mustWireguardKeypair(t)
-	clientPriv, _ := mustWireguardKeypair(t)
-	const email, subID = "alice@awg", "sub-awg-hosts"
-	settings := fmt.Sprintf(`{"server":{"privateKey":%q,"publicKey":%q,"mtu":1420},"clients":[{"email":%q,"privateKey":%q,"allowedIPs":["10.8.0.2/32"],"enable":true}]}`,
-		serverPriv, serverPub, email, clientPriv)
-	ib := seedTunnelSubInbound(t, model.AmneziaWG, "awg-in", subID, email, settings, 51821)
-	seedHost(t, &model.Host{InboundId: ib.Id, SortOrder: 1, Remark: "CDN", Address: "awg.example.com", Port: 8443})
-
-	links, _, _, _, err := NewSubService("").GetSubs(subID, "sub.example.com")
-	if err != nil {
-		t.Fatalf("GetSubs: %v", err)
-	}
-	parts := splitLinkLines(strings.Join(links, "\n"))
-	if len(parts) != 1 {
-		t.Fatalf("links = %d, want 1: %v", len(parts), parts)
-	}
-	conf := decodeAmneziaWGSubLink(t, parts[0])
-	for _, line := range []string{"Endpoint = awg.example.com:8443", "# awg-in-CDN-" + email, "PrivateKey = " + clientPriv} {
-		if !strings.Contains(conf, line) {
-			t.Fatalf("config missing %q\n%s", line, conf)
-		}
-	}
-	if strings.Contains(conf, "203.0.113.5") {
-		t.Fatalf("config still advertises the inbound address\n%s", conf)
-	}
-}

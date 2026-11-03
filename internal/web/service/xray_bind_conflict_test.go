@@ -2,13 +2,9 @@ package service
 
 import (
 	"encoding/json"
-	"strconv"
 	"strings"
 	"testing"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/amneziawgnet"
-	"github.com/mhsanaei/3x-ui/v3/internal/database"
-	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/xray"
 )
 
@@ -202,60 +198,5 @@ func TestBindConflicts_MessageNamesBothSides(t *testing.T) {
 		if !strings.Contains(msg, want) {
 			t.Fatalf("conflict message %q must contain %q", msg, want)
 		}
-	}
-}
-
-// The probe must read what the panel really emits: the AmneziaWG relay is a
-// loopback "socks" inbound whose udp flag lives in settings, not streamSettings.
-func TestBindConflicts_GeneratedConfig(t *testing.T) {
-	cases := []struct {
-		name    string
-		portOff int
-		running bool
-		want    int
-	}{
-		{"user inbound on the relay port", 0, false, 1},
-		{"already running config", 0, true, 0},
-		{"user inbound on a free port", 1, false, 0},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			setupSettingTestDB(t)
-			seedInboundConflict(t, "awg-1", "0.0.0.0", 51820, model.AmneziaWG, ``, amneziawgRoutedSettings)
-
-			var awg model.Inbound
-			if err := database.GetDB().Where("tag = ?", "awg-1").First(&awg).Error; err != nil {
-				t.Fatalf("read seeded row: %v", err)
-			}
-			relayPort := amneziawgnet.SOCKSPortForInbound(awg.Id)
-			seedInboundConflict(t, "user", "0.0.0.0", relayPort+tc.portOff, model.VLESS, `{"network":"tcp"}`, `{}`)
-
-			svc := &XrayService{}
-			cfg, err := svc.GetXrayConfig()
-			if err != nil {
-				t.Fatalf("GetXrayConfig: %v", err)
-			}
-			running := (*xray.Config)(nil)
-			if tc.running {
-				if running, err = svc.GetXrayConfig(); err != nil {
-					t.Fatalf("second GetXrayConfig: %v", err)
-				}
-			}
-
-			got := bindConflicts(cfg, running)
-			if len(got) != tc.want {
-				t.Fatalf("bindConflicts = %v, want %d", got, tc.want)
-			}
-			if tc.want == 0 {
-				return
-			}
-			msg := got[0].String()
-			for _, want := range []string{`"awg-1"`, `"user"`, strconv.Itoa(relayPort)} {
-				if !strings.Contains(msg, want) {
-					t.Fatalf("conflict message %q must contain %q", msg, want)
-				}
-			}
-		})
 	}
 }

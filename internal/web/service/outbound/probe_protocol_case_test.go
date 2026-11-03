@@ -1,7 +1,6 @@
 package outbound
 
 import (
-	"encoding/json"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -69,47 +68,6 @@ func TestOutboundTransportIsUDPMatchesTheCore(t *testing.T) {
 				t.Errorf("outboundTransportIsUDP(%v) = %v, want %v", tt.ob, got, tt.want)
 			}
 		})
-	}
-}
-
-func TestBuildBatchTestConfigReadsTheProtocolIDLikeTheCore(t *testing.T) {
-	items := []*httpBatchItem{
-		{tag: "wg", outbound: map[string]any{"tag": "wg", "protocol": "WireGuard"}},
-		{tag: "awg", outbound: map[string]any{"tag": "awg", "protocol": "AmneziaWG"}},
-	}
-
-	cfg := buildBatchTestConfig(items, nil, []int{61011, 61012})
-	raw, err := json.Marshal(cfg)
-	if err != nil {
-		t.Fatalf("marshal config: %v", err)
-	}
-	var m map[string]any
-	if err := json.Unmarshal(raw, &m); err != nil {
-		t.Fatalf("unmarshal config: %v", err)
-	}
-
-	outbounds, _ := m["outbounds"].([]any)
-	byTag := make(map[string]map[string]any, len(outbounds))
-	for _, entry := range outbounds {
-		ob, _ := entry.(map[string]any)
-		tag, _ := ob["tag"].(string)
-		byTag[tag] = ob
-	}
-
-	wg := byTag["wg"]
-	if wg == nil {
-		t.Fatalf("wg outbound missing from the temp config: %v", outbounds)
-	}
-	if settings, _ := wg["settings"].(map[string]any); settings == nil || settings["noKernelTun"] != true {
-		t.Errorf(`"WireGuard" settings = %v, want noKernelTun: the probe instance must not create a kernel device`, wg["settings"])
-	}
-
-	awg := byTag["awg"]
-	if awg == nil {
-		t.Fatalf("awg outbound missing from the temp config: %v", outbounds)
-	}
-	if protocol, _ := awg["protocol"].(string); protocol != "socks" {
-		t.Errorf(`"AmneziaWG" protocol = %q, want %q: a raw amneziawg entry fails the whole temp config`, protocol, "socks")
 	}
 }
 

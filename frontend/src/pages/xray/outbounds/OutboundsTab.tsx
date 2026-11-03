@@ -21,7 +21,6 @@ import {
 import {
   PlusOutlined,
   CloudOutlined,
-  ApiOutlined,
   MoreOutlined,
   RetweetOutlined,
   PlayCircleOutlined,
@@ -97,9 +96,6 @@ interface OutboundsTabProps {
   onTest: (index: number, mode: string) => void;
   onTestSubscription: (outbound: Record<string, unknown>, mode: string) => void;
   onTestAll: (mode: string) => void;
-  onShowWarp: () => void;
-  onShowNord: () => void;
-  onShowPia: () => void;
   onRefreshXrayData?: () => void;
 }
 
@@ -118,9 +114,6 @@ export default function OutboundsTab({
   onTest,
   onTestSubscription,
   onTestAll,
-  onShowWarp,
-  onShowNord,
-  onShowPia,
   onRefreshXrayData,
 }: OutboundsTabProps) {
   const { t } = useTranslation();
@@ -565,25 +558,6 @@ export default function OutboundsTab({
                 trigger={['click']}
                 menu={{
                   items: [
-                    {
-                      key: 'warp',
-                      icon: <CloudOutlined aria-hidden />,
-                      label: 'WARP',
-                      onClick: onShowWarp,
-                    },
-                    {
-                      key: 'nord',
-                      icon: <ApiOutlined aria-hidden />,
-                      label: 'NordVPN',
-                      onClick: onShowNord,
-                    },
-                    {
-                      key: 'pia',
-                      icon: <ApiOutlined aria-hidden />,
-                      label: t('pages.xray.pia.menu'),
-                      onClick: onShowPia,
-                    },
-                    { type: 'divider' },
                     {
                       key: 'import',
                       icon: <ImportOutlined aria-hidden />,

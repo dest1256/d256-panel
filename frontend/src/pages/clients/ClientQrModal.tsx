@@ -16,11 +16,6 @@ import {
   findWireguardInbounds,
   isWireguardClient,
 } from './wireguardConfig';
-import {
-  buildAmneziaWGClientConfig,
-  findAmneziaWGInbounds,
-  isAmneziaWGClient,
-} from './amneziawgConfig';
 import { buildTuicClientConfig, findTuicInbound, isTuicClient } from './tuicConfig';
 import { tunnelConfigEndpoints, tunnelEndpointLabel } from './tunnelEndpoints';
 import type { HostRecord } from '@/schemas/api/host';
@@ -346,26 +341,6 @@ function ClientQrModalContent({
       .filter((c) => !!c.text);
   }, [client, wgInbounds, tunnelAllowedIPs, subSettings.publicHost, hosts]);
 
-  const awgInbounds = useMemo(
-    () => findAmneziaWGInbounds(client, inboundsById),
-    [client, inboundsById],
-  );
-  const awgConfigs = useMemo(() => {
-    if (!client || !isAmneziaWGClient(client)) return [];
-    const host = window.location.hostname;
-    const publicHost = subSettings.publicHost ?? '';
-    return awgInbounds
-      .flatMap((ib) => {
-        const address = tunnelAllowedIPs?.[ib.id] ?? '';
-        return tunnelConfigEndpoints(ib, hosts, host, publicHost).map((ep) => ({
-          inbound: ib,
-          endpoint: tunnelEndpointLabel(ep),
-          text: buildAmneziaWGClientConfig(client, ib, host, publicHost, address, ep),
-        }));
-      })
-      .filter((c) => !!c.text);
-  }, [client, awgInbounds, tunnelAllowedIPs, subSettings.publicHost, hosts]);
-
   const tuicInbound = useMemo(() => findTuicInbound(client, inboundsById), [client, inboundsById]);
   const tuicConfigs = useMemo(() => {
     if (!client || !tuicInbound || !isTuicClient(client)) return [];
@@ -381,7 +356,6 @@ function ClientQrModalContent({
     !!subLink ||
     !!subJsonLink ||
     wgConfigs.length > 0 ||
-    awgConfigs.length > 0 ||
     tuicConfigs.length > 0 ||
     links.length > 0;
 
@@ -488,22 +462,6 @@ function ClientQrModalContent({
         children: <QrPanel value={text} remark={meta.qrRemark} downloadName={meta.fileName} />,
       });
     });
-    awgConfigs.forEach(({ inbound, endpoint, text }) => {
-      const meta = formatTunnelConfigMeta(inbound, client?.email, awgConfigs.length, endpoint);
-      const label = (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <Tag color="purple" style={{ margin: 0 }}>
-            {t('pages.clients.amneziaWgConfig')}
-          </Tag>
-          {meta.label && <span style={{ opacity: 0.85, fontSize: 12 }}>{meta.label}</span>}
-        </span>
-      );
-      out.push({
-        key: `awg-config-${inbound.id}-${endpoint}`,
-        label,
-        children: <QrPanel value={text} remark={meta.qrRemark} downloadName={meta.fileName} />,
-      });
-    });
     tuicConfigs.forEach(({ endpoint, text }) => {
       const name = client?.email || 'tuic';
       const multi = tuicConfigs.length > 1 ? endpoint : '';
@@ -536,7 +494,6 @@ function ClientQrModalContent({
     happError,
     happLinkEnabled,
     wgConfigs,
-    awgConfigs,
     links,
     client?.email,
     selectVariant,

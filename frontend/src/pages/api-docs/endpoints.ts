@@ -237,13 +237,6 @@ export const sections: readonly Section[] = [
         response: '{\n  "success": true,\n  "obj": "csrf-token-string"\n}',
       },
       {
-        method: 'GET',
-        path: '/sponsors',
-        summary:
-          'Public. Active paid sponsor placements read from the project sponsors.json (cached for 1h); entries outside their from/until window are dropped. Logos are proxied by the panel at /sponsors/logo/{name}. Used by the login page and panel sponsor slots.',
-        responseSchema: 'SponsorList',
-      },
-      {
         method: 'POST',
         path: '/getTwoFactorEnable',
         summary:
@@ -282,13 +275,6 @@ export const sections: readonly Section[] = [
           'Lightweight picker projection of the authenticated user’s inbounds. Returns id, remark, tag, protocol, port, a server-computed tlsFlowCapable flag (true for VLESS on TCP with tls or reality, or on XHTTP with VLESS encryption / vlessenc enabled), and ssMethod (the Shadowsocks cipher, empty for non-Shadowsocks inbounds — used by the client UI to generate a valid Shadowsocks 2022 PSK). Use this for dropdowns and attach pickers — it skips settings, streamSettings, and clientStats so the payload stays small even on panels with thousands of clients.',
         responseSchema: 'InboundOption',
         responseSchemaArray: true,
-      },
-      {
-        method: 'GET',
-        path: '/panel/api/inbounds/amneziawgKernelReadiness',
-        responseSchema: 'Readiness',
-        summary:
-          'Whether this host can run an AmneziaWG inbound on the kernel module. Returns ready, host blocker codes (root/tools/module/nft), and the command that fixes them. Saving an inbound also checks its features and rejects IPv6, port forwarding, routeThroughXray, or a pinned listen address that the kernel backend cannot honor.',
       },
       {
         method: 'GET',
@@ -460,14 +446,6 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'GET',
-        path: '/panel/api/server/fail2banStatus',
-        summary:
-          'Reports whether per-client IP limits can be enforced on this host. The panel uses it to gate the "IP Limit" field, since enforcement depends on Fail2ban being installed.',
-        response:
-          '{\n  "success": true,\n  "obj": {\n    "enabled": true,\n    "installed": true,\n    "usable": true,\n    "windows": false\n  }\n}',
-      },
-      {
-        method: 'GET',
         path: '/panel/api/server/cpuHistory/:bucket',
         summary:
           'Legacy: aggregated CPU history. Use /history/cpu/:bucket instead — same data with a uniform {t, v} shape.',
@@ -504,83 +482,6 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'GET',
-        path: '/panel/api/server/xrayMetricsState',
-        summary:
-          'Xray runtime metrics state — whether the xray config has a `metrics` block, which expvar keys are flowing, and the current snapshot values for each. Returns an empty state when metrics are not configured.',
-      },
-      {
-        method: 'GET',
-        path: '/panel/api/server/xrayMetricsHistory/:metric/:bucket',
-        summary:
-          'Time-series history for one Xray runtime metric over the last ~6 hours. Same {t, v} shape as /history/:metric/:bucket.',
-        params: [
-          {
-            name: 'metric',
-            in: 'path',
-            type: 'string',
-            desc: 'xrAlloc | xrSys | xrHeapObjects | xrNumGC | xrPauseNs.',
-          },
-          {
-            name: 'bucket',
-            in: 'path',
-            type: 'number',
-            desc: 'Bucket size in seconds. Allowed: 2, 30, 60, 120, 180, 300.',
-          },
-        ],
-      },
-      {
-        method: 'GET',
-        path: '/panel/api/server/xrayObservatory',
-        summary:
-          'Latest snapshot from the Xray observatory — per-outbound latency, health status, and last-probe time. Only populated when the Xray config has an observatory configured.',
-      },
-      {
-        method: 'GET',
-        path: '/panel/api/server/xrayObservatoryHistory/:tag/:bucket',
-        summary:
-          'Time-series of observatory probe results for one outbound tag. Same {t, v} shape as the other history endpoints.',
-        params: [
-          {
-            name: 'tag',
-            in: 'path',
-            type: 'string',
-            desc: 'Outbound tag from the observatory config.',
-          },
-          {
-            name: 'bucket',
-            in: 'path',
-            type: 'number',
-            desc: 'Bucket size in seconds. Allowed: 2, 30, 60, 120, 180, 300.',
-          },
-        ],
-      },
-      {
-        method: 'GET',
-        path: '/panel/api/server/getXrayVersion',
-        summary: 'List Xray binary versions available for install on this host.',
-        response: '{\n  "success": true,\n  "obj": ["v25.10.31", "v25.9.15", "v25.8.1"]\n}',
-      },
-      {
-        method: 'GET',
-        path: '/panel/api/server/getPanelUpdateInfo',
-        summary: 'Check whether a newer 3x-ui release is available on GitHub.',
-      },
-      {
-        method: 'GET',
-        path: '/panel/api/server/getUpdateStatus',
-        summary:
-          'Report the outcome of the most recently launched panel self-update (see POST updatePanel). Compare the returned runId against the one updatePanel returned to tell this run apart from a stale result.',
-        responseSchema: 'PanelUpdateStatus',
-      },
-      {
-        method: 'GET',
-        path: '/panel/api/server/getConfigJson',
-        summary: 'Return the assembled Xray config that\u2019s currently running on this host.',
-        response:
-          '{\n  "success": true,\n  "obj": {\n    "log": { "loglevel": "warning" },\n    "inbounds": [...],\n    "outbounds": [...],\n    "routing": { "rules": [...] }\n  }\n}',
-      },
-      {
-        method: 'GET',
         path: '/panel/api/server/getDb',
         summary:
           'Stream a full database backup as an attachment: the SQLite .db file on SQLite panels, or a pg_dump custom-format archive (.dump) on PostgreSQL panels. Use as a manual backup.',
@@ -596,22 +497,6 @@ export const sections: readonly Section[] = [
         path: '/panel/api/server/getNewUUID',
         summary: 'Generate a fresh UUID v4. Convenience helper for client IDs.',
         responseSchema: 'NewUUIDResponse',
-      },
-      {
-        method: 'GET',
-        path: '/panel/api/server/getWebCertFiles',
-        summary:
-          'Return this panel\'s own web TLS certificate and key file paths. The central panel calls it on a node (via the node API token) so "Set Cert from Panel" fills a node-assigned inbound with paths that exist on the node.',
-        response:
-          '{\n  "success": true,\n  "obj": {\n    "webCertFile": "/root/cert/example.com/fullchain.pem",\n    "webKeyFile": "/root/cert/example.com/privkey.pem"\n  }\n}',
-      },
-      {
-        method: 'GET',
-        path: '/panel/api/server/descendants',
-        summary:
-          'Read-only summaries (guid, parentGuid, name, address, status, versions) of the nodes this panel manages. A parent panel calls it on a node (via the node API token) to surface transitive sub-nodes in a chained topology. Counts are computed by the parent, not returned here.',
-        response:
-          '{\n  "success": true,\n  "obj": [\n    {\n      "guid": "c3d4-...",\n      "parentGuid": "a1b2-...",\n      "name": "Node3",\n      "address": "10.0.0.3",\n      "status": "online"\n    }\n  ]\n}',
       },
       {
         method: 'GET',
@@ -639,172 +524,6 @@ export const sections: readonly Section[] = [
           'Generate VLESS encryption auth options. Returns an auths array each with id, label, encryption, and decryption fields.',
         response:
           '{\n  "success": true,\n  "obj": {\n    "auths": [\n      { "id": 0, "label": "Auth #0", "encryption": "aes-256-gcm", "decryption": "" }\n    ]\n  }\n}',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/server/stopXrayService',
-        summary: 'Stop the Xray binary. All proxies go offline immediately.',
-        errorResponse: '{\n  "success": false,\n  "msg": "Xray is not running"\n}',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/server/restartXrayService',
-        summary:
-          'Reload Xray with the current config. Typically required after structural inbound or routing changes.',
-        errorResponse: '{\n  "success": false,\n  "msg": "Xray config is invalid: ..."\n}',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/server/installXray/:version',
-        summary:
-          'Download and install the specified Xray version. Pass "latest" for the newest release.',
-        params: [
-          {
-            name: 'version',
-            in: 'path',
-            type: 'string',
-            desc: 'Xray tag (e.g. v25.10.31) or "latest".',
-          },
-        ],
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/server/updatePanel',
-        summary:
-          'Self-update the panel to the latest version. The server restarts on success. Bearer-token callers need admin or node-admin scope.',
-        params: [
-          {
-            name: 'dev',
-            in: 'body (form)',
-            type: 'boolean',
-            desc: "Override this run's channel. Omit to use the panel's configured channel.",
-            optional: true,
-          },
-        ],
-        response: '{\n  "success": true,\n  "obj": {\n    "runId": "1735689600123456789"\n  }\n}',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/server/setUpdateChannel',
-        summary:
-          'Toggle the panel update channel between stable and the rolling per-commit dev release. Only effective on dev builds.',
-        params: [
-          {
-            name: 'dev',
-            in: 'body (form)',
-            type: 'boolean',
-            desc: 'true = dev channel, false = stable.',
-          },
-        ],
-        body: 'dev=true',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/server/updateGeofile',
-        summary:
-          'Refresh the default GeoIP / GeoSite data files. Use the /:fileName variant to update one file.',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/server/updateGeofile/:fileName',
-        summary: 'Refresh a single Geo file by filename (e.g. geoip.dat, geosite.dat).',
-        params: [
-          {
-            name: 'fileName',
-            in: 'path',
-            type: 'string',
-            desc: 'Filename of the data file to refresh.',
-          },
-        ],
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/server/logs/:count',
-        summary: 'Return the last N lines of the panel\u2019s own log.',
-        params: [
-          { name: 'count', in: 'path', type: 'number', desc: 'Number of trailing log lines.' },
-          {
-            name: 'level',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Minimum log level filter.',
-            optional: true,
-          },
-          {
-            name: 'syslog',
-            in: 'body (form)',
-            type: 'boolean',
-            desc: 'Read system logs instead of the panel log.',
-            optional: true,
-          },
-        ],
-        body: 'level=info&syslog=false',
-        responseObjectSchema: { type: 'array', nullable: true, items: { type: 'string' } },
-        response:
-          '{\n  "success": true,\n  "obj": [\n    "2025/01/01 12:00:00 [INFO] Server started",\n    "2025/01/01 12:00:01 [INFO] Xray is running"\n  ]\n}',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/server/xraylogs/:count',
-        summary: 'Return the last N lines of the Xray process log.',
-        params: [
-          { name: 'count', in: 'path', type: 'number', desc: 'Number of trailing log lines.' },
-          {
-            name: 'filter',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Keyword filter — only lines containing this string.',
-            optional: true,
-          },
-          {
-            name: 'showDirect',
-            in: 'body (form)',
-            type: 'string',
-            desc: '"true" to include direct (freedom) traffic lines.',
-            optional: true,
-          },
-          {
-            name: 'showBlocked',
-            in: 'body (form)',
-            type: 'string',
-            desc: '"true" to include blocked (blackhole) traffic lines.',
-            optional: true,
-          },
-          {
-            name: 'showProxy',
-            in: 'body (form)',
-            type: 'string',
-            desc: '"true" to include proxy traffic lines.',
-            optional: true,
-          },
-        ],
-        body: 'filter=error&showDirect=false&showBlocked=true&showProxy=true',
-        responseSchema: 'LogEntry',
-        responseSchemaArray: true,
-        responseSchemaArrayNullable: true,
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/server/amneziawglogs/:count',
-        summary:
-          'Return live AmneziaWG peer activity (handshake, endpoint, transfer) plus the panel’s own AmneziaWG event lines.',
-        params: [
-          {
-            name: 'count',
-            in: 'path',
-            type: 'number',
-            desc: 'Maximum peer rows and event lines to return.',
-          },
-          {
-            name: 'filter',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Keyword filter — only rows/lines containing this string.',
-            optional: true,
-          },
-        ],
-        body: 'filter=awg1',
-        responseSchema: 'AmneziaWGLogs',
       },
       {
         method: 'POST',
@@ -874,29 +593,6 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'POST',
-        path: '/panel/api/server/getRemoteCertHash',
-        summary:
-          'Run `xray tls ping` against a remote server and return its live leaf-certificate SHA-256 hash(es) for pinning (pinnedPeerCertSha256).',
-        params: [
-          {
-            name: 'server',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Remote server as domain or domain:port (default port 443), e.g. cloudflare-dns.com.',
-          },
-          {
-            name: 'allowPrivate',
-            in: 'body (form)',
-            type: 'boolean',
-            optional: true,
-            desc: 'Ping a private/internal/loopback server (LAN, Docker service name). Default false (SSRF guard blocks it and the error response sets obj.privateTarget=true).',
-          },
-        ],
-        body: 'server=cloudflare-dns.com',
-        response: '{\n  "success": true,\n  "obj": [\n    "e8e2d3..."\n  ]\n}',
-      },
-      {
-        method: 'POST',
         path: '/panel/api/server/scanRealityTarget',
         summary:
           'Run a live TLS 1.3 probe against a candidate REALITY target and return a feasibility verdict (TLS 1.3 + h2 + X25519 + trusted certificate) plus the certificate SAN DNS names. A target on a private/loopback address is reported with privateTarget=true and probed only when allowPrivate is set.',
@@ -949,39 +645,6 @@ export const sections: readonly Section[] = [
         body: 'targets=104.16.0.0/24,www.apple.com:443',
         responseSchema: 'RealityScanResult',
         responseSchemaArray: true,
-      },
-      {
-        method: 'GET',
-        path: '/panel/api/server/clientIps',
-        summary:
-          'Fetch the fully aggregated inbound_client_ips database table. Used by nodes to sync recently active IPs across the cluster.',
-        responseSchema: 'InboundClientIps',
-        responseSchemaArray: true,
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/server/clientIps',
-        summary:
-          'Submit a list of recently active IP timestamps. The panel merges them with the existing database to maintain a unified global IP-limit view.',
-        requestSchema: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              clientEmail: { type: 'string' },
-              ips: {
-                type: 'array',
-                nullable: true,
-                items: {
-                  type: 'object',
-                  properties: { ip: { type: 'string' }, timestamp: { type: 'integer' } },
-                  required: ['ip', 'timestamp'],
-                },
-              },
-            },
-            required: ['clientEmail', 'ips'],
-          },
-        },
       },
     ],
   },
@@ -1883,14 +1546,7 @@ export const sections: readonly Section[] = [
     id: 'backup',
     title: 'Backup',
     description: 'Operations that interact with the configured Telegram bot.',
-    endpoints: [
-      {
-        method: 'POST',
-        path: '/panel/api/backuptotgbot',
-        summary:
-          'Send a fresh DB backup to every Telegram chat configured as an admin recipient. No body, no params.',
-      },
-    ],
+    endpoints: [],
   },
 
   {
@@ -1952,33 +1608,6 @@ export const sections: readonly Section[] = [
         path: '/panel/api/setting/restartPanel',
         summary:
           'Restart the entire 3x-ui process after a 3-second grace period. The connection drops immediately; the panel comes back online ~5-10 seconds later.',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/setting/testSmtp',
-        summary:
-          'Test SMTP connection with stage-by-stage reporting (connect, auth, send). Returns structured result with stage and message.',
-        response:
-          '{\n  "success": true,\n  "stage": "send",\n  "msg": "Test email sent successfully"\n}',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/setting/testTgBot',
-        summary: 'Test Telegram bot connection by sending a test message to the configured chat.',
-        response: '{\n  "success": true,\n  "msg": "Test message sent to Telegram"\n}',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/setting/tgBotCapabilities',
-        summary:
-          'Report what the configured bot can do. Inline mode is a BotFather switch, so the panel warns when it is off.',
-        responseSchema: 'TgBotCapabilities',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/setting/testDiscord',
-        summary: 'Test Discord bot connection by sending a test embed to the configured channel.',
-        response: '{\n  "success": true,\n  "msg": "Test notification sent successfully"\n}',
       },
       {
         method: 'GET',
@@ -2095,18 +1724,6 @@ export const sections: readonly Section[] = [
           'Return the built-in default Xray config shipped with the panel (identical to /panel/api/setting/getDefaultJsonConfig).',
       },
       {
-        method: 'GET',
-        path: '/panel/api/xray/getOutboundsTraffic',
-        summary:
-          'Return traffic statistics for every outbound. Each outbound shows up/down/total counters.',
-      },
-      {
-        method: 'GET',
-        path: '/panel/api/xray/getXrayResult',
-        summary:
-          'Return the most recent Xray process stdout/stderr output. Useful to check for startup errors or runtime warnings.',
-      },
-      {
         method: 'POST',
         path: '/panel/api/xray/update',
         summary:
@@ -2126,287 +1743,6 @@ export const sections: readonly Section[] = [
             optional: true,
           },
         ],
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/xray/warp/:action',
-        summary: 'Manage Cloudflare Warp integration. The action parameter selects the operation.',
-        params: [
-          {
-            name: 'action',
-            in: 'path',
-            type: 'string',
-            desc: 'data — return Warp stats. del — delete Warp data. config — return current config. reg — register (sends keys). regMasque — register a separate device enrolled for MASQUE and return its warp key pair, addresses and endpoint. changeIp — rotate the endpoint. license — set a Warp+ key. interval — set automatic rotation in hours.',
-          },
-          {
-            name: 'privateKey',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Required when action=reg.',
-            optional: true,
-          },
-          {
-            name: 'publicKey',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Required when action=reg.',
-            optional: true,
-          },
-          {
-            name: 'license',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Required when action=license.',
-            optional: true,
-          },
-          {
-            name: 'interval',
-            in: 'body (form)',
-            type: 'integer',
-            desc: 'Non-negative hours between automatic rotations. Required when action=interval; 0 disables rotation.',
-            optional: true,
-          },
-        ],
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/xray/nord/:action',
-        summary: 'Manage NordVPN integration. The action parameter selects the operation.',
-        params: [
-          {
-            name: 'action',
-            in: 'path',
-            type: 'string',
-            desc: 'countries — list available countries. servers — list servers in a country (sends countryId). reg — get NordVPN credentials (sends token). setKey — store NordVPN API key (sends key). data — return current NordVPN connection data. del — delete NordVPN data.',
-          },
-          {
-            name: 'countryId',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Required when action=servers.',
-            optional: true,
-          },
-          {
-            name: 'token',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Required when action=reg.',
-            optional: true,
-          },
-          {
-            name: 'key',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Required when action=setKey.',
-            optional: true,
-          },
-        ],
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/xray/pia/:action',
-        summary: 'Manage PIA WireGuard integration. The action parameter selects the operation.',
-        params: [
-          {
-            name: 'action',
-            in: 'path',
-            type: 'string',
-            desc: 'countries — list available countries from the signed PIA server list. servers — list regions and WireGuard servers in a country (sends countryCode). reg — sign in with a PIA username and password (sends username, password). data — return the signed-in account hint. del — delete stored PIA credentials. addKey — register a WireGuard key with the selected server (sends hostname) and return fields to build the outbound.',
-          },
-          {
-            name: 'username',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Required when action=reg.',
-            optional: true,
-          },
-          {
-            name: 'password',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Required when action=reg.',
-            optional: true,
-          },
-          {
-            name: 'countryCode',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Required when action=servers.',
-            optional: true,
-          },
-          {
-            name: 'hostname',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Required when action=addKey.',
-            optional: true,
-          },
-        ],
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/xray/resetOutboundsTraffic',
-        summary: 'Reset traffic counters for a specific outbound by tag.',
-        params: [
-          {
-            name: 'tag',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Outbound tag to reset (e.g. "proxy", "direct").',
-          },
-        ],
-        body: 'tag=proxy',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/xray/testOutbound',
-        summary:
-          'Test an outbound configuration. Sends the outbound JSON (required), optionally all outbounds (to resolve sockopt.dialerProxy dependencies), and a mode flag.',
-        params: [
-          {
-            name: 'outbound',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'JSON-encoded single outbound to test (required).',
-          },
-          {
-            name: 'allOutbounds',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'JSON array of all outbounds — used to resolve dialerProxy chains.',
-            optional: true,
-          },
-          {
-            name: 'mode',
-            in: 'body (form)',
-            type: 'string',
-            desc: '"tcp" for a fast dial-only probe (parallel-safe), "real" for a real-delay probe whose delay is the full request time including tunnel establishment. Default/empty uses a full HTTP probe reporting the warm per-request round-trip. Both HTTP variants run through a temp xray instance.',
-            optional: true,
-          },
-        ],
-        body: 'outbound={"protocol":"freedom","settings":{}}&mode=tcp',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/xray/testOutbounds',
-        summary:
-          'Test a batch of outbounds (max 50) through one shared temp xray instance. Returns an array of results in input order, each with the outbound tag, delay, HTTP status and a connect/TLS/TTFB timing breakdown.',
-        params: [
-          {
-            name: 'outbounds',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'JSON array of outbound configs to test (required).',
-          },
-          {
-            name: 'allOutbounds',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'JSON array of all outbounds — used to resolve dialerProxy chains.',
-            optional: true,
-          },
-          {
-            name: 'mode',
-            in: 'body (form)',
-            type: 'string',
-            desc: '"tcp" for fast dial-only probes (UDP-transport outbounds are still probed over HTTP), "real" for real-delay probes whose delay is the full request time including tunnel establishment. Default/empty routes an HTTP request through each outbound and reports the warm per-request round-trip.',
-            optional: true,
-          },
-        ],
-        body: 'outbounds=[{"tag":"direct","protocol":"freedom","settings":{}}]&mode=http',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/xray/balancerStatus',
-        summary:
-          'Live state of routing balancers in the running core (RoutingService.GetBalancerInfo): current override and the targets the strategy prefers. Returns a map keyed by balancer tag.',
-        params: [
-          {
-            name: 'tags',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Comma-separated balancer tags to query (e.g. "b1,b2").',
-          },
-        ],
-        body: 'tags=b1,b2',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/xray/balancerOverride',
-        summary:
-          'Force a balancer in the running core to always pick one outbound (RoutingService.OverrideBalancerTarget). Applied live without a restart and kept across config saves; cleared when Xray restarts or the target outbound is removed.',
-        params: [
-          { name: 'tag', in: 'body (form)', type: 'string', desc: 'Balancer tag (required).' },
-          {
-            name: 'target',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Outbound tag to force; it must exist in the running config. Empty clears the override and returns control to the strategy.',
-            optional: true,
-          },
-        ],
-        body: 'tag=b1&target=proxy',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/xray/routeTest',
-        summary:
-          'Ask the running core which outbound its router would pick for a synthetic connection (RoutingService.TestRoute). No traffic is sent.',
-        bodyRequiredOneOf: ['domain', 'ip'],
-        params: [
-          {
-            name: 'domain',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Target domain. Either domain or ip is required.',
-            optional: true,
-            minLength: 1,
-          },
-          {
-            name: 'ip',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Target IP. Either domain or ip is required.',
-            optional: true,
-            minLength: 1,
-          },
-          {
-            name: 'port',
-            in: 'body (form)',
-            type: 'number',
-            desc: 'Target port (optional).',
-            optional: true,
-          },
-          {
-            name: 'network',
-            in: 'body (form)',
-            type: 'string',
-            desc: '"tcp" (default) or "udp".',
-            optional: true,
-          },
-          {
-            name: 'inboundTag',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Simulate arrival on this inbound (optional).',
-            optional: true,
-          },
-          {
-            name: 'protocol',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Sniffed protocol such as http, tls, bittorrent (optional).',
-            optional: true,
-          },
-          {
-            name: 'email',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'User attribution for user-based rules (optional).',
-            optional: true,
-          },
-        ],
-        body: 'domain=example.com&port=443&network=tcp',
       },
       {
         method: 'GET',

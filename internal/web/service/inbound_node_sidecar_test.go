@@ -2,11 +2,9 @@ package service
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 	"testing"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/amneziawgnet"
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 )
@@ -99,71 +97,6 @@ func TestAddInbound_SidecarProtocolNodeVersionGate(t *testing.T) {
 	}
 }
 
-// The egress port is a loopback port on the host running mtg; one picked or
-// copied on the master can be taken on the node, so the node must allocate it.
-func TestAddInbound_NodeMtprotoLeavesTheEgressPortToTheNode(t *testing.T) {
-	setupConflictDB(t)
-	node := seedVersionedNode(t, "v3.8.0")
-
-	ib := sidecarNodeInbound(t, model.MTProto, "mt-routed", node.Id)
-	ib.Settings = `{"routeThroughXray":true,"routeXrayPort":4444,` + strings.TrimPrefix(ib.Settings, "{")
-	created, _, err := (&InboundService{}).AddInbound(ib)
-	if err != nil {
-		t.Fatalf("AddInbound: %v", err)
-	}
-	var stored model.Inbound
-	if err := database.GetDB().First(&stored, created.Id).Error; err != nil {
-		t.Fatalf("read created row: %v", err)
-	}
-	var settings map[string]any
-	if err := json.Unmarshal([]byte(stored.Settings), &settings); err != nil {
-		t.Fatalf("decode settings: %v", err)
-	}
-	if port, ok := settings["routeXrayPort"]; ok {
-		t.Fatalf("routeXrayPort = %v reached the node row; the node must allocate its own", port)
-	}
-	if settings["routeThroughXray"] != true {
-		t.Fatalf("routeThroughXray = %v, want true kept", settings["routeThroughXray"])
-	}
-}
-
-// A peer's forward listener binds on the host running the AmneziaWG row, so a
-// node row is checked against that node's inbounds, never the master's.
-func TestAddInbound_NodeAmneziaWGForwardedPortsCheckTheNodesHost(t *testing.T) {
-	cases := []struct {
-		name    string
-		onNode  bool
-		wantErr bool
-	}{
-		{"port of a master-local inbound", false, false},
-		{"port of an inbound on the same node", true, true},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			setupConflictDB(t)
-			node := seedVersionedNode(t, "v3.8.0")
-			var owner *int
-			if tc.onNode {
-				owner = &node.Id
-			}
-			seedInboundConflictNode(t, "holder", "0.0.0.0", 8443, model.VLESS, `{"network":"tcp"}`, `{"clients":[]}`, owner)
-
-			ib := sidecarNodeInbound(t, model.AmneziaWG, "awg-fwd", node.Id)
-			ib.Settings = awgRelayWindowSettingsWithForward(t, "awg-fwd", "8443")
-			_, _, err := (&InboundService{}).AddInbound(ib)
-			if !tc.wantErr {
-				if err != nil {
-					t.Fatalf("8443 is bound on the master, not on the node; the create must be allowed: %v", err)
-				}
-				return
-			}
-			if err == nil || !strings.Contains(err.Error(), "forwardedPorts collides with inbound 'holder'") {
-				t.Fatalf("err = %v, want a forwardedPorts refusal naming 'holder'", err)
-			}
-		})
-	}
-}
-
 // awgClientsPayload is the clients-only body the client endpoints take: one
 // fresh peer of tag at address, forwarding forwardedPorts.
 func awgClientsPayload(t *testing.T, tag, address, forwardedPorts string) string {
@@ -227,18 +160,5 @@ func TestUpdateInboundClient_NodeAmneziaWGForwardIgnoresMasterPorts(t *testing.T
 	data := &model.Inbound{Id: row.Id, Settings: `{"clients":[` + edited + `]}`}
 	if _, err := (&ClientService{}).UpdateInboundClient(&InboundService{}, data, "awg-node@relay-window"); err != nil {
 		t.Fatalf("8443 is bound on the master, not on the node; the edit must be allowed: %v", err)
-	}
-}
-
-// A relay port derives from the inbound id on the panel running it; the node's
-// id differs from the master's, so a master-side derivation names a wrong port.
-func TestAddInbound_NodeAmneziaWGForwardIgnoresMasterDerivedRelayPorts(t *testing.T) {
-	row := seedNodeAmneziaWGBesideLocalHolder(t)
-
-	ib := sidecarNodeInbound(t, model.AmneziaWG, "awg-fwd", *row.NodeID)
-	ib.Port = 51821
-	ib.Settings = awgRelayWindowSettingsWithForward(t, "awg-fwd", fmt.Sprintf("%d", amneziawgnet.SOCKSPortForInbound(row.Id)))
-	if _, _, err := (&InboundService{}).AddInbound(ib); err != nil {
-		t.Fatalf("the master's id for a node row derives no port on the node; the create must be allowed: %v", err)
 	}
 }

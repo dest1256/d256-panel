@@ -724,8 +724,10 @@ type XrayStatus struct {
 	Error               string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
 	Version             string                 `protobuf:"bytes,3,opt,name=version,proto3" json:"version,omitempty"`
 	AppliedStateVersion uint64                 `protobuf:"varint,4,opt,name=applied_state_version,json=appliedStateVersion,proto3" json:"applied_state_version,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// Emails of users with a live connection (capped at 5000).
+	OnlineUsers   []string `protobuf:"bytes,5,rep,name=online_users,json=onlineUsers,proto3" json:"online_users,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *XrayStatus) Reset() {
@@ -784,6 +786,13 @@ func (x *XrayStatus) GetAppliedStateVersion() uint64 {
 		return x.AppliedStateVersion
 	}
 	return 0
+}
+
+func (x *XrayStatus) GetOnlineUsers() []string {
+	if x != nil {
+		return x.OnlineUsers
+	}
+	return nil
 }
 
 // DesiredState is everything the node must run. The panel is the only builder; the node applies it
@@ -1486,13 +1495,14 @@ const file_nodelink_v1_nodelink_proto_rawDesc = "" +
 	"\vuptime_secs\x18\x10 \x01(\x04R\n" +
 	"uptimeSecs\x12#\n" +
 	"\rjournal_bytes\x18\x11 \x01(\x04R\fjournalBytes\x12%\n" +
-	"\x0eonline_clients\x18\x12 \x01(\rR\ronlineClients\"\x86\x01\n" +
+	"\x0eonline_clients\x18\x12 \x01(\rR\ronlineClients\"\xa9\x01\n" +
 	"\n" +
 	"XrayStatus\x12\x14\n" +
 	"\x05state\x18\x01 \x01(\tR\x05state\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12\x18\n" +
 	"\aversion\x18\x03 \x01(\tR\aversion\x122\n" +
-	"\x15applied_state_version\x18\x04 \x01(\x04R\x13appliedStateVersion\"\xcb\x01\n" +
+	"\x15applied_state_version\x18\x04 \x01(\x04R\x13appliedStateVersion\x12!\n" +
+	"\fonline_users\x18\x05 \x03(\tR\vonlineUsers\"\xcb\x01\n" +
 	"\fDesiredState\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\x04R\aversion\x12(\n" +
 	"\x10xray_config_json\x18\x02 \x01(\fR\x0exrayConfigJson\x12!\n" +

@@ -2,7 +2,6 @@ package service
 
 import (
 	"encoding/json"
-	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -211,27 +210,6 @@ func TestDesiredTuicInstances(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("expected to find instance for inbound 30")
-	}
-}
-
-func TestCheckForwardedPortsConflict_CollidesWithTuicSocksPort(t *testing.T) {
-	setupConflictDB(t)
-	seedInboundConflict(t, "tuic-1", "0.0.0.0", 8443, model.TUIC, ``, `{"clients":[{"uuid":"u","password":"p","email":"e"}]}`)
-
-	var tuicInbound model.Inbound
-	if err := database.GetDB().Where("tag = ?", "tuic-1").First(&tuicInbound).Error; err != nil {
-		t.Fatalf("read seeded row: %v", err)
-	}
-	relayPort := tuic.SOCKSPortForInbound(tuicInbound.Id)
-
-	svc := &InboundService{}
-	ctx, err := svc.loadPortConflictContext(database.GetDB(), nil)
-	if err != nil {
-		t.Fatalf("loadPortConflictContext: %v", err)
-	}
-	hit := svc.checkForwardedPortsConflict(ctx, fmt.Sprintf("%d", relayPort))
-	if !strings.Contains(hit, "SOCKS5") {
-		t.Fatalf("expected a collision naming the TUIC inbound's SOCKS5 relay port, got %q", hit)
 	}
 }
 

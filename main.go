@@ -3,7 +3,6 @@
 package main
 
 import (
-	"context"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -11,25 +10,20 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"os/exec"
 	"os/signal"
-	"runtime"
 	"strings"
 	"syscall"
 	_ "unsafe"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/config"
-	"github.com/mhsanaei/3x-ui/v3/internal/crypto/nodetoken"
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 	"github.com/mhsanaei/3x-ui/v3/internal/sub"
-	"github.com/mhsanaei/3x-ui/v3/internal/tunnelmonitor"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/sys"
 	"github.com/mhsanaei/3x-ui/v3/internal/web"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/global"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service/panel"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service/tgbot"
 
 	"github.com/joho/godotenv"
 	"github.com/op/go-logging"
@@ -42,35 +36,6 @@ const cliFallbackTokenName = "cli-fallback"
 // installTokenName is minted once on a panel with no tokens and is deliberately
 // not the rotated slot, so the credential the installer recorded keeps working.
 const installTokenName = "install"
-
-// initNodeTokenCrypto loads the process codec, preferring the key file over
-// the environment and failing closed when an enabled policy lacks a key.
-func initNodeTokenCrypto() error {
-	mode, err := nodetoken.ParseMode(config.GetNodeTokenEncryptionMode())
-	if err != nil {
-		return err
-	}
-	if mode == nodetoken.ModeOff {
-		c, _ := nodetoken.NewCodec(nodetoken.ModeOff, nil)
-		nodetoken.Init(c)
-		return nil
-	}
-	ring, ferr := (nodetoken.FileKeySource{Path: config.GetNodeTokenKeyFile()}).Load()
-	if ferr != nil {
-		var eerr error
-		if ring, eerr = (nodetoken.EnvKeySource{Var: config.GetNodeTokenKeyEnv()}).Load(); eerr != nil {
-			return fmt.Errorf("load node-token key: file: %w; env: %w", ferr, eerr)
-		}
-	}
-	c, err := nodetoken.NewCodec(mode, ring)
-	if err != nil {
-		return err
-	}
-	nodetoken.Init(c)
-	// The CLI runs before package logger initialization, so use log.Printf.
-	log.Printf("node-token encryption enabled (mode=%s, active-key=%s)", config.GetNodeTokenEncryptionMode(), c.ActiveKeyID())
-	return nil
-}
 
 // runWebServer initializes and starts the web server for the 3x-ui panel.
 func runWebServer() {
@@ -106,10 +71,6 @@ func runWebServer() {
 		}()
 	}
 
-	if err := initNodeTokenCrypto(); err != nil {
-		log.Fatalf("Error initializing node-token encryption: %v", err)
-	}
-
 	err := database.InitDB(config.GetDBPath())
 	if err != nil {
 		log.Fatalf("Error initializing database: %v", err)
@@ -141,7 +102,7 @@ func runWebServer() {
 
 	sigCh := make(chan os.Signal, 8)
 	// Trap shutdown signals
-	signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGTERM, sys.SIGUSR1, os.Interrupt)
+	signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGTERM, os.Interrupt)
 	global.SetRestartHook(func() {
 		select {
 		case sigCh <- syscall.SIGHUP:
@@ -149,26 +110,6 @@ func runWebServer() {
 		}
 	})
 
-	var stopTunnelHealthMonitor context.CancelFunc
-	monitorCfg := tunnelmonitor.ConfigFromEnv()
-	if monitorCfg.Enabled {
-		if monitorCfg.ProxyURL == "" {
-			logger.Warning("Tunnel health monitor enabled without XUI_TUNNEL_HEALTH_PROXY: the probe measures host connectivity, not the xray tunnel, so failures will restart xray without fixing host network issues")
-		}
-
-		monitorCtx, cancel := context.WithCancel(context.Background())
-		stopTunnelHealthMonitor = cancel
-
-		monitor, err := tunnelmonitor.New(monitorCfg, func(_ context.Context) error {
-			logger.Warning("Tunnel health monitor threshold reached, restarting xray-core")
-			return server.RestartXray()
-		})
-		if err != nil {
-			logger.Warning("Tunnel health monitor disabled: ", err)
-		} else {
-			go monitor.Run(monitorCtx)
-		}
-	}
 	for {
 		sig := <-sigCh
 
@@ -201,22 +142,7 @@ func runWebServer() {
 				log.Fatalf("Error restarting sub server: %v", err)
 			}
 			log.Println("Sub server restarted successfully.")
-		case sys.SIGUSR1:
-			logger.Info("Received USR1 signal, restarting xray-core...")
-			err := server.RestartXray()
-			if err != nil {
-				logger.Error("Failed to restart xray-core:", err)
-			}
-
 		default:
-			if stopTunnelHealthMonitor != nil {
-				stopTunnelHealthMonitor()
-			}
-
-			// --- FIX FOR TELEGRAM BOT CONFLICT (409) on full shutdown ---
-			tgbot.StopBot()
-			// ------------------------------------------------------------
-
 			if err := server.Stop(); err != nil {
 				logger.Error("Server shutdown failed:", err)
 			}
@@ -286,84 +212,6 @@ func showSetting(show bool) {
 		fmt.Println("port:", port)
 		fmt.Println("webBasePath:", webBasePath)
 	}
-}
-
-// updateTgbotEnableSts enables or disables the Telegram bot notifications based on the status parameter.
-func updateTgbotEnableSts(status bool) {
-	settingService := service.SettingService{}
-	currentTgSts, err := settingService.GetTgbotEnabled()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	logger.Infof("current enabletgbot status[%v],need update to status[%v]", currentTgSts, status)
-	if currentTgSts != status {
-		err := settingService.SetTgbotEnabled(status)
-		if err != nil {
-			fmt.Println(err)
-			return
-		} else {
-			logger.Infof("SetTgbotEnabled[%v] success", status)
-		}
-	}
-}
-
-// updateTgbotSetting updates Telegram bot settings including token, chat ID, and runtime schedule.
-func updateTgbotSetting(tgBotToken string, tgBotChatid string, tgBotRuntime string) {
-	err := database.InitDB(config.GetDBPath())
-	if err != nil {
-		fmt.Println("Error initializing database:", err)
-		return
-	}
-
-	settingService := service.SettingService{}
-
-	if tgBotToken != "" {
-		err := settingService.SetTgBotToken(tgBotToken)
-		if err != nil {
-			fmt.Printf("Error setting Telegram bot token: %v\n", err)
-			return
-		}
-		logger.Info("Successfully updated Telegram bot token.")
-	}
-
-	if tgBotRuntime != "" {
-		err := settingService.SetTgbotRuntime(tgBotRuntime)
-		if err != nil {
-			fmt.Printf("Error setting Telegram bot runtime: %v\n", err)
-			return
-		}
-		logger.Infof("Successfully updated Telegram bot runtime to [%s].", tgBotRuntime)
-	}
-
-	if tgBotChatid != "" {
-		err := settingService.SetTgBotChatId(tgBotChatid)
-		if err != nil {
-			fmt.Printf("Error setting Telegram bot chat ID: %v\n", err)
-			return
-		}
-		logger.Info("Successfully updated Telegram bot chat ID.")
-	}
-}
-
-// encryptNodeTokens re-encrypts stored tokens after enablement or rotation.
-// It requires migration|required mode and a configured key.
-func encryptNodeTokens() {
-	_ = godotenv.Load()
-	if err := initNodeTokenCrypto(); err != nil {
-		fmt.Println("node-token encryption init failed:", err)
-		os.Exit(1)
-	}
-	if err := database.InitDB(config.GetDBPath()); err != nil {
-		fmt.Println("database initialization failed:", err)
-		os.Exit(1)
-	}
-	changed, skipped, err := (&service.NodeService{}).MigrateNodeTokensToActiveKey()
-	if err != nil {
-		fmt.Println("token migration failed:", err)
-		os.Exit(1)
-	}
-	fmt.Printf("node-token migration complete: %d re-encrypted, %d already current/skipped\n", changed, skipped)
 }
 
 // updateSetting updates various panel settings including port, credentials, base path, listen IP, and two-factor authentication.
@@ -616,10 +464,6 @@ func main() {
 	var getListen bool
 	var webCertFile string
 	var webKeyFile string
-	var tgbottoken string
-	var tgbotchatid string
-	var enabletgbot bool
-	var tgbotRuntime string
 	var reset bool
 	var show bool
 	var getCert bool
@@ -642,10 +486,6 @@ func main() {
 	settingCmd.StringVar(&tokenScope, "tokenScope", "", "Scope of the token -getApiToken issues: admin, monitor or node-sync (default: the scope of the token it replaces, or admin for a new one)")
 	settingCmd.StringVar(&webCertFile, "webCert", "", "Set path to public key file for panel")
 	settingCmd.StringVar(&webKeyFile, "webCertKey", "", "Set path to private key file for panel")
-	settingCmd.StringVar(&tgbottoken, "tgbottoken", "", "Set token for Telegram bot")
-	settingCmd.StringVar(&tgbotRuntime, "tgbotRuntime", "", "Set cron time for Telegram bot notifications")
-	settingCmd.StringVar(&tgbotchatid, "tgbotchatid", "", "Set chat ID for Telegram bot notifications")
-	settingCmd.BoolVar(&enabletgbot, "enabletgbot", false, "Enable notifications via Telegram bot")
 
 	oldUsage := flag.Usage
 	flag.Usage = func() {
@@ -667,12 +507,8 @@ func main() {
 			return
 		}
 		runWebServer()
-	case "install-awg-kernel":
-		installAmneziaWGKernelModule()
 	case "migrate":
 		migrateDb()
-	case "encrypt-tokens":
-		encryptNodeTokens()
 	case "migrate-db":
 		if err := migrateDbCmd.Parse(os.Args[2:]); err != nil {
 			fmt.Println(err)
@@ -742,12 +578,6 @@ func main() {
 		if getApiToken {
 			GetApiToken(getApiToken, tokenName, tokenScope)
 		}
-		if (tgbottoken != "") || (tgbotchatid != "") || (tgbotRuntime != "") {
-			updateTgbotSetting(tgbottoken, tgbotchatid, tgbotRuntime)
-		}
-		if enabletgbot {
-			updateTgbotEnableSts(enabletgbot)
-		}
 	case "cert":
 		err := settingCmd.Parse(os.Args[2:])
 		if err != nil {
@@ -774,53 +604,9 @@ Commands:
     run            run web panel
     migrate        migrate from other/old x-ui
     migrate-db     SQLite <-> .dump (--dump/--restore) or copy into PostgreSQL (--dsn)
-    encrypt-tokens encrypt node bearer tokens with the configured active key
     setting        set settings
-    install-awg-kernel
                    build and install the AmneziaWG kernel module (required for
                    an AmneziaWG inbound's kernel mode)
 `
 }
 
-//go:embed scripts/install-amneziawg-kernel.sh
-var installAwgKernelScript []byte
-
-// installAmneziaWGKernelModule runs the bundled module installer.
-// It needs a terminal for its apt and DKMS build output.
-func installAmneziaWGKernelModule() {
-	if runtime.GOOS != "linux" {
-		fmt.Println("the AmneziaWG kernel module is Linux-only")
-		return
-	}
-	if os.Geteuid() != 0 {
-		exe, err := os.Executable()
-		if err != nil || exe == "" {
-			exe = "/usr/local/x-ui/x-ui"
-		}
-		fmt.Println("run as root: sudo " + exe + " install-awg-kernel")
-		return
-	}
-
-	f, err := os.CreateTemp("", "install-amneziawg-kernel-*.sh")
-	if err != nil {
-		fmt.Println("could not stage the installer:", err)
-		return
-	}
-	defer os.Remove(f.Name())
-	if _, err := f.Write(installAwgKernelScript); err != nil {
-		f.Close()
-		fmt.Println("could not write the installer:", err)
-		return
-	}
-	f.Close()
-
-	// No timeout: an apt+dkms build legitimately runs for minutes.
-	cmd := exec.CommandContext(context.Background(), "bash", f.Name())
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
-	if err := cmd.Run(); err != nil {
-		fmt.Println("install failed:", err)
-		os.Exit(1)
-	}
-}

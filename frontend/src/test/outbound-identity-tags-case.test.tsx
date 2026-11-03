@@ -38,9 +38,6 @@ function renderTab(settings: XraySettingsValue) {
         onTest={vi.fn()}
         onTestSubscription={vi.fn()}
         onTestAll={vi.fn()}
-        onShowWarp={vi.fn()}
-        onShowNord={vi.fn()}
-        onShowPia={vi.fn()}
       />
     </QueryClientProvider>,
   );

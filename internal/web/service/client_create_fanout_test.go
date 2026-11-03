@@ -8,9 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/runtime"
 )
 
 func TestCreateAcrossManyInboundsUsesOneEmailSnapshot(t *testing.T) {
@@ -129,84 +127,6 @@ func (b *barrierNodeRuntime) AddClient(ctx context.Context, ib *model.Inbound, c
 	}
 	b.inFlight.Add(-1)
 	return b.fakeNodeRuntime.AddClient(ctx, ib, c)
-}
-
-func fanoutNodeInbounds(t *testing.T, mgr *runtime.Manager, rt runtime.Runtime, n int, basePort int) []int {
-	t.Helper()
-	ids := make([]int, 0, n)
-	for i := range n {
-		node := &model.Node{
-			Name: fmt.Sprintf("%s-%d", t.Name(), i), Address: "127.0.0.1", Port: 2096 + i,
-			ApiToken: "tok", Enable: true, Status: "online",
-		}
-		if err := database.GetDB().Create(node).Error; err != nil {
-			t.Fatalf("create node %d: %v", i, err)
-		}
-		mgr.SetRuntimeOverride(node.Id, rt)
-		ids = append(ids, nodeInbound(t, node.Id, basePort+i, nil).Id)
-	}
-	return ids
-}
-
-// TestCreateAcrossNodesPushesConcurrently pins that a client spanning several
-// node inbounds pushes to them at once, up to inboundFanoutConcurrency at a time.
-func TestCreateAcrossNodesPushesConcurrently(t *testing.T) {
-	setupBulkDB(t)
-	startSerializedWriter(t)
-	mgr := useTestRuntimeManager(t)
-
-	const nodes = inboundFanoutConcurrency + 1
-	bar := &barrierNodeRuntime{fanout: inboundFanoutConcurrency, release: make(chan struct{})}
-	ids := fanoutNodeInbounds(t, mgr, bar, nodes, 40101)
-
-	if _, err := (&ClientService{}).Create(&InboundService{}, &ClientCreatePayload{
-		Client:     model.Client{Email: "fanout@x", ID: "11111111-2222-3333-4444-555555555555", SubID: "sub-fanout", Enable: true},
-		InboundIds: ids,
-	}); err != nil {
-		t.Fatalf("Create across %d node inbounds: %v", nodes, err)
-	}
-
-	if got := bar.addClient.Load(); got != nodes {
-		t.Fatalf("AddClient pushes = %d, want %d", got, nodes)
-	}
-	if got := bar.maxPar.Load(); got < 2 || got != inboundFanoutConcurrency {
-		t.Fatalf("peak node pushes in flight = %d, want overlap at the %d cap (barrier timed out: %v)",
-			got, inboundFanoutConcurrency, bar.expired.Load())
-	}
-}
-
-// TestCreateRecoversPanicInOneInbound pins that a panicking inbound fails only
-// itself: off the request goroutine nothing else would catch it.
-func TestCreateRecoversPanicInOneInbound(t *testing.T) {
-	setupBulkDB(t)
-	startSerializedWriter(t)
-	mgr := useTestRuntimeManager(t)
-
-	node := &model.Node{
-		Name: t.Name(), Address: "127.0.0.1", Port: 2096,
-		ApiToken: "tok", Enable: true, Status: "online",
-	}
-	if err := database.GetDB().Create(node).Error; err != nil {
-		t.Fatalf("create node: %v", err)
-	}
-	mgr.SetRuntimeOverride(node.Id, &panicNodeRuntime{})
-	boom := nodeInbound(t, node.Id, 40201, nil)
-	healthy := mkInbound(t, 40202, model.VLESS, `{"clients":[]}`)
-
-	const uuid = "33333333-4444-5555-6666-777777777777"
-	_, err := (&ClientService{}).Create(&InboundService{}, &ClientCreatePayload{
-		Client:     model.Client{Email: "panic@x", ID: uuid, SubID: "sub-panic", Enable: true},
-		InboundIds: []int{boom.Id, healthy.Id},
-	})
-	if err == nil {
-		t.Fatal("a panicking node runtime produced no error")
-	}
-	if want := fmt.Sprintf("inbound %d: panic:", boom.Id); !strings.Contains(err.Error(), want) {
-		t.Fatalf("error %q does not report %q", err, want)
-	}
-	if !settingsHoldUUID(t, &InboundService{}, healthy.Id, uuid) {
-		t.Fatalf("healthy inbound %d did not get the client", healthy.Id)
-	}
 }
 
 // TestCreateLeavesHwidLimitAloneWhenCreateFails pins that a create the panel

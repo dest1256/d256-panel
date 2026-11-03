@@ -52,17 +52,6 @@ describe('generated OpenAPI request bodies', () => {
     ];
     expect(form.schema.properties).toHaveProperty('data');
 
-    const logs = requestBody('/panel/api/server/logs/{count}');
-    expect(logs.content).toHaveProperty('application/x-www-form-urlencoded');
-    expect(logs.content['application/x-www-form-urlencoded'].schema.properties).toHaveProperty(
-      'syslog',
-    );
-
-    const outboundTest = requestBody('/panel/api/xray/testOutbound').content[
-      'application/x-www-form-urlencoded'
-    ];
-    expect(outboundTest.schema.required).toEqual(['outbound']);
-
     const outboundUpdate = requestBody('/panel/api/xray/outbound-subs/{id}').content[
       'application/x-www-form-urlencoded'
     ];
@@ -90,27 +79,6 @@ describe('generated OpenAPI request bodies', () => {
     expect(multipart.schema.properties).toHaveProperty('keepHostSettings');
     expect(multipart.schema.properties?.keepHostSettings?.default).toBe(true);
 
-    const array = requestBody('/panel/api/server/clientIps').content['application/json'];
-    expect(array.schema).toEqual({
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          clientEmail: { type: 'string' },
-          ips: {
-            type: 'array',
-            nullable: true,
-            items: {
-              type: 'object',
-              properties: { ip: { type: 'string' }, timestamp: { type: 'integer' } },
-              required: ['ip', 'timestamp'],
-            },
-          },
-        },
-        required: ['clientEmail', 'ips'],
-      },
-    });
-
     const certHash = requestBody('/panel/api/server/getCertHash');
     expect(certHash.required).toBe(true);
     const certSchema = certHash.content['application/x-www-form-urlencoded'].schema;
@@ -123,18 +91,7 @@ describe('generated OpenAPI request bodies', () => {
     expect(certSchema.anyOf?.[1].properties?.certFile).not.toHaveProperty('pattern');
     expect(certSchema.anyOf?.[1].properties?.certContent.pattern).toBe('.*\\S.*');
 
-    const routeSchema = requestBody('/panel/api/xray/routeTest').content[
-      'application/x-www-form-urlencoded'
-    ].schema;
-    expect(routeSchema.anyOf?.map((branch) => branch.required)).toEqual([['domain'], ['ip']]);
-    expect(routeSchema.anyOf?.[0].properties?.domain?.minLength).toBe(1);
-    expect(routeSchema.anyOf?.[0].properties?.ip).not.toHaveProperty('minLength');
-    expect(routeSchema.anyOf?.[1].properties?.domain).not.toHaveProperty('minLength');
-    expect(routeSchema.anyOf?.[1].properties?.ip?.minLength).toBe(1);
-
     const bulkAttach = requestBody('/panel/api/clients/bulkAttach').content['application/json'];
     expect(bulkAttach.schema.properties?.emails?.items).toEqual({ type: 'string' });
-
-    expect(paths['/panel/api/server/updateGeofile'].post).not.toHaveProperty('requestBody');
   });
 });

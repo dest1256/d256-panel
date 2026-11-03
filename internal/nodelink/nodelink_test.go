@@ -352,7 +352,7 @@ func TestLinkRejectsOversizedMessage(t *testing.T) {
 	}
 	big := &pb.NodeToPanel{Msg: &pb.NodeToPanel_XrayStatus{XrayStatus: &pb.XrayStatus{Error: strings.Repeat("A", maxRecvMsgSize+1024)}}}
 	_ = st.Send(big)
-	if _, err := st.Recv(); err == nil {
+	if _, err := recvUntil(st, func(*pb.PanelToNode) bool { return false }); err == nil {
 		t.Fatal("oversized message must terminate the stream")
 	}
 }

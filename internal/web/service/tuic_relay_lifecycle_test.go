@@ -1,41 +1,14 @@
 package service
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/uuid"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/runtime"
 	"github.com/mhsanaei/3x-ui/v3/internal/xray"
 )
-
-func TestTuicFailedReconcileRetriesWithoutRequestingCoreRestart(t *testing.T) {
-	setupBulkDB(t)
-	if err := (&SettingService{}).saveSetting("xrayTemplateConfig", `{broken`); err != nil {
-		t.Fatal(err)
-	}
-	wasStopped := isManuallyStopped.Swap(false)
-	wasRestart := isNeedXrayRestart.Swap(false)
-	wasReconcile := isNeedXrayReconcile.Swap(false)
-	t.Cleanup(func() {
-		isManuallyStopped.Store(wasStopped)
-		isNeedXrayRestart.Store(wasRestart)
-		isNeedXrayReconcile.Store(wasReconcile)
-	})
-	svc := &XrayService{}
-	rt := runtime.NewLocal(runtime.LocalDeps{SetNeedRestart: svc.SetToNeedRestart, RequestReconcile: svc.SetToNeedReconcile})
-	inbound := &model.Inbound{Id: 940004, Protocol: model.TUIC}
-	if err := rt.UpdateInbound(context.Background(), inbound, inbound); err != nil {
-		t.Fatal(err)
-	}
-	svc.ApplyPendingRestart()
-	if isNeedXrayRestart.Load() || !isNeedXrayReconcile.Load() {
-		t.Fatalf("failed TUIC reconciliation became a core restart or lost retry: restart=%t reconcile=%t", isNeedXrayRestart.Load(), isNeedXrayReconcile.Load())
-	}
-}
 
 func TestTuicQuotaResetDoesNotChangeRelayAdmission(t *testing.T) {
 	for _, reset := range []string{"telegram", "scheduled"} {

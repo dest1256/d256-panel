@@ -18,7 +18,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/amneziawg"
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
@@ -931,12 +930,8 @@ func (s *SubService) GetLink(inbound *model.Inbound, email string) string {
 		return s.genShadowsocksLink(inbound, email)
 	case "hysteria":
 		return s.genHysteriaLink(inbound, email)
-	case "mtproto":
-		return s.genMtprotoLink(inbound, email)
 	case "wireguard":
 		return s.genWireguardLink(inbound, email)
-	case "amneziawg":
-		return s.genAmneziaWGLink(inbound, email)
 	case "tuic":
 		return s.genTuicLink(inbound, email)
 	}
@@ -1061,166 +1056,6 @@ func (s *SubService) genWireguardLink(inbound *model.Inbound, email string) stri
 	for _, e := range endpoints {
 		link := fmt.Sprintf("wireguard://%s@%s", encodeUserinfo(client.PrivateKey), joinHostPort(e.Address, e.Port))
 		links = append(links, buildLinkWithParams(link, params, s.endpointRemark(inbound, email, e.ep, "")))
-	}
-	return strings.Join(links, "\n")
-}
-
-// amneziaWGHeaderOrDefault mirrors the frontend's amneziaWGHLine: AmneziaWG's
-// H1-H4 magic-header fields always render into the config text, falling back
-// to their protocol-default values (1/2/3/4) when unset rather than being
-// omitted, since a native AmneziaWG client needs all four to be present.
-func amneziaWGHeaderOrDefault(value, fallback string) string {
-	if strings.TrimSpace(value) == "" {
-		return fallback
-	}
-	return value
-}
-
-// amneziaWGConfigText builds the same plain AmneziaWG client .conf text the
-// frontend's genAmneziaWGConfig produces (same field order, same optional-field
-// conditionals) -- this is the payload wrapped into vpn:// links below.
-func amneziaWGConfigText(server *amneziawg.ServerSettings, client *model.Client, host string, port int, remark string) string {
-	lines := []string{
-		"[Interface]",
-		"PrivateKey = " + client.PrivateKey,
-		"Address = " + strings.Join(client.AllowedIPs, ", "),
-	}
-
-	var dns []string
-	if server.PrimaryDNS != "" {
-		dns = append(dns, server.PrimaryDNS)
-	}
-	if server.SecondaryDNS != "" {
-		dns = append(dns, server.SecondaryDNS)
-	}
-	if len(dns) > 0 {
-		lines = append(lines, "DNS = "+strings.Join(dns, ", "))
-	}
-	// Always emitted: a missing MTU line leaves the client on its own 1420
-	// default and fragments the client-to-server direction once S4 passes 20.
-	lines = append(lines, fmt.Sprintf("MTU = %d", amneziawg.EffectiveMTU(server.MTU, server.S4)))
-
-	lines = append(lines,
-		fmt.Sprintf("Jc = %d", server.Jc),
-		fmt.Sprintf("Jmin = %d", server.Jmin),
-		fmt.Sprintf("Jmax = %d", server.Jmax),
-		fmt.Sprintf("S1 = %d", server.S1),
-		fmt.Sprintf("S2 = %d", server.S2),
-	)
-	if server.S3 > 0 {
-		lines = append(lines, fmt.Sprintf("S3 = %d", server.S3))
-	}
-	if server.S4 > 0 {
-		lines = append(lines, fmt.Sprintf("S4 = %d", server.S4))
-	}
-	lines = append(lines,
-		"H1 = "+amneziaWGHeaderOrDefault(server.H1, "1"),
-		"H2 = "+amneziaWGHeaderOrDefault(server.H2, "2"),
-		"H3 = "+amneziaWGHeaderOrDefault(server.H3, "3"),
-		"H4 = "+amneziaWGHeaderOrDefault(server.H4, "4"),
-	)
-	for i, v := range []string{server.I1, server.I2, server.I3, server.I4, server.I5} {
-		if v != "" {
-			lines = append(lines, fmt.Sprintf("I%d = %s", i+1, v))
-		}
-	}
-	optional := []struct{ key, v string }{
-		{"HeaderProtectionKey", server.HeaderProtectionKey},
-		{"ContentPaddingAddition", server.ContentPaddingAddition},
-		{"RekeyAfterTime", server.RekeyAfterTime},
-		{"RekeyTimeout", server.RekeyTimeout},
-		{"RejectAfterTime", server.RejectAfterTime},
-		{"KeepaliveTimeout", server.KeepaliveTimeout},
-		{"MaxHandshakeAttempts", server.MaxHandshakeAttempts},
-	}
-	for _, p := range optional {
-		if p.v != "" {
-			lines = append(lines, p.key+" = "+p.v)
-		}
-	}
-	if server.RandomTrailers {
-		lines = append(lines, "RandomTrailers = on")
-	}
-	if server.DisableCookies {
-		lines = append(lines, "DisableCookies = on")
-	}
-
-	// Peer field order follows wg-quick(8) and the panel's other two AmneziaWG
-	// emitters (genAmneziaWGConfig, buildAmneziaWGClientConfig); all three are
-	// independent implementations, so any drift here is invisible until a user
-	// compares a subscription link against a downloaded .conf.
-	lines = append(lines, "", "# "+remark, "[Peer]", "PublicKey = "+server.PublicKey)
-	if client.PreSharedKey != "" {
-		lines = append(lines, "PresharedKey = "+client.PreSharedKey)
-	}
-	lines = append(lines, "AllowedIPs = 0.0.0.0/0, ::/0", fmt.Sprintf("Endpoint = %s:%d", host, port))
-	if client.KeepAlive != nil {
-		keepAlive := client.KeepAliveText()
-		if (strings.Contains(keepAlive, "-") && client.KeepAlive.Validate(true) == nil) || client.KeepAlive.Seconds() > 0 {
-			lines = append(lines, "PersistentKeepalive = "+keepAlive)
-		}
-	}
-
-	// A control character would split its line, and the split can re-open
-	// [Interface], whose PostUp runs as root wherever awg-quick applies this.
-	for _, line := range lines {
-		if amneziawg.ValidateConfigValue("config line", line) != nil {
-			return ""
-		}
-	}
-	return strings.Join(lines, "\n")
-}
-
-// genAmneziaWGLink builds a per-client vpn://<base64url .conf text> share
-// link matching the real AmneziaVPN app's own share-link scheme (see the
-// frontend's genAmneziaWGLink for the confirmed import-path reasoning).
-// Returns "" when the client or server has no key.
-func (s *SubService) genAmneziaWGLink(inbound *model.Inbound, email string) string {
-	if inbound.Protocol != model.AmneziaWG {
-		return ""
-	}
-	var parsed amneziawg.InboundSettings
-	if err := json.Unmarshal([]byte(inbound.Settings), &parsed); err != nil || parsed.Server == nil {
-		return ""
-	}
-	server := parsed.Server
-
-	resolved, ok := s.clientForLink(inbound, email)
-	if !ok || resolved.PrivateKey == "" {
-		return ""
-	}
-	client := &resolved
-
-	endpoints := s.advertisedEndpoints(inbound)
-	links := make([]string, 0, len(endpoints))
-	for _, e := range endpoints {
-		text := amneziaWGConfigText(server, client, e.Address, e.Port, s.endpointRemark(inbound, email, e.ep, ""))
-		if text == "" {
-			continue
-		}
-		links = append(links, "vpn://"+base64.RawURLEncoding.EncodeToString([]byte(text)))
-	}
-	return strings.Join(links, "\n")
-}
-
-// genMtprotoLink builds one Telegram link per advertised endpoint with the client's FakeTLS secret.
-// It omits remarks because lenient parsers fold a fragment into the last query value.
-func (s *SubService) genMtprotoLink(inbound *model.Inbound, email string) string {
-	if inbound.Protocol != model.MTProto {
-		return ""
-	}
-	resolved, ok := s.clientForLink(inbound, email)
-	if !ok || resolved.Secret == "" {
-		return ""
-	}
-	endpoints := s.advertisedEndpoints(inbound)
-	links := make([]string, 0, len(endpoints))
-	for _, endpoint := range endpoints {
-		links = append(links, buildLinkWithParams("tg://proxy", map[string]string{
-			"server": endpoint.Address,
-			"port":   fmt.Sprintf("%d", endpoint.Port),
-			"secret": resolved.Secret,
-		}, ""))
 	}
 	return strings.Join(links, "\n")
 }

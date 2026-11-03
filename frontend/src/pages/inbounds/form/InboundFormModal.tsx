@@ -13,7 +13,6 @@ import {
   withoutClients,
 } from '@/lib/xray/inbound-form-adapter';
 import { createDefaultInboundSettings } from '@/lib/xray/inbound-defaults';
-import { generateAwgObfuscation } from '@/lib/xray/amneziawg-obfuscation';
 import { composeInboundTag, isAutoInboundTag, type InboundTagInput } from '@/lib/xray/inbound-tag';
 import {
   canEnableReality,
@@ -55,13 +54,11 @@ import './InboundFormModal.css';
 import { AdvancedAllEditor, AdvancedSliceEditor } from './advanced-editors';
 import { formatInboundIssue, formatInboundValidation } from './formatValidationError';
 import {
-  AmneziawgFields,
   HttpFields,
   HysteriaFields,
   MasqueSettingsFields,
   MasqueStreamFields,
   MixedFields,
-  MtprotoFields,
   ShadowsocksFields,
   TuicFields,
   TunFields,
@@ -364,21 +361,6 @@ export default function InboundFormModal({
     }
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [awgPubKey, protocol]);
-
-  const regenInboundAwg = () => {
-    const kp = Wireguard.generateKeypair();
-    setV('settings.server.privateKey', kp.privateKey);
-    setV('settings.server.publicKey', kp.publicKey);
-  };
-
-  // Randomizes the AmneziaWG 3.1 obfuscation set client-side; the shared
-  // generator mirrors the Go backend's amneziawg.GenerateObfuscation31.
-  const regenInboundAwgObfuscation = () => {
-    const obf = generateAwgObfuscation();
-    for (const [field, value] of Object.entries(obf)) {
-      setV(`settings.server.${field}`, value);
-    }
-  };
 
   const matchesVlessAuth = (
     block: { id?: string; label?: string } | undefined | null,
@@ -799,14 +781,6 @@ export default function InboundFormModal({
         <WireguardFields wgPubKey={wgPubKey} regenInboundWg={regenInboundWg} />
       )}
 
-      {protocol === Protocols.AMNEZIAWG && (
-        <AmneziawgFields
-          awgPubKey={awgPubKey}
-          regenInboundAwg={regenInboundAwg}
-          regenInboundAwgObfuscation={regenInboundAwgObfuscation}
-        />
-      )}
-
       {protocol === Protocols.TUIC && <TuicFields />}
 
       {protocol === Protocols.MASQUE && <MasqueSettingsFields />}
@@ -817,8 +791,6 @@ export default function InboundFormModal({
 
       {protocol === Protocols.HTTP && <HttpFields />}
       {protocol === Protocols.MIXED && <MixedFields mixedUdpOn={mixedUdpOn} />}
-
-      {protocol === Protocols.MTPROTO && <MtprotoFields />}
 
       {protocol === Protocols.SHADOWSOCKS && <ShadowsocksFields isSSWith2022={isSSWith2022} />}
 

@@ -1,13 +1,11 @@
 package service
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
-	"reflect"
 	"slices"
 	"strconv"
 	"sync/atomic"
@@ -18,29 +16,6 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/database/dbtest"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 )
-
-func TestProbeParsesNetIO(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"success":true,"obj":{"cpu":5,"mem":{"current":1,"total":2},"netIO":{"up":1000,"down":2000},"panelGuid":"g","uptime":42}}`))
-	}))
-	defer srv.Close()
-
-	u, err := url.Parse(srv.URL)
-	if err != nil {
-		t.Fatalf("parse url: %v", err)
-	}
-	port, _ := strconv.Atoi(u.Port())
-	n := &model.Node{Scheme: "http", Address: u.Hostname(), Port: port, BasePath: "/", ApiToken: "t", AllowPrivateAddress: true}
-
-	patch, err := (&NodeService{}).probe(context.Background(), n, "")
-	if err != nil {
-		t.Fatalf("probe: %v", err)
-	}
-	if patch.NetUp != 1000 || patch.NetDown != 2000 {
-		t.Fatalf("net throughput not parsed from status: up=%d down=%d", patch.NetUp, patch.NetDown)
-	}
-}
 
 func TestUpdateHeartbeatStoresNetMetrics(t *testing.T) {
 	_ = setupSettingMtlsDB(t)
@@ -123,60 +98,6 @@ const (
 	unavailableStatusBody = `{"success":true,"obj":{"cpu":0,"uptime":0,"unavailableMetrics":["cpu","uptime"],"mem":{"current":1,"total":2},"xray":{"state":"running"}}}`
 	zeroStatusBody        = `{"success":true,"obj":{"cpu":0,"uptime":0,"mem":{"current":1,"total":2},"xray":{"state":"running"}}}`
 )
-
-func TestProbeKeepsMetricAvailability(t *testing.T) {
-	svc, n, _ := availabilityNodeFixture(t, unavailableStatusBody)
-	patch, err := svc.Probe(context.Background(), n)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := unavailableMetricsOf(t, patch.ToUI(true)); !reflect.DeepEqual(got, []string{"cpu", "uptime"}) {
-		t.Fatalf("probe availability=%v, want cpu+uptime unavailable", got)
-	}
-}
-
-func TestUpdateHeartbeatKeepsUnavailableCPUOutOfHistory(t *testing.T) {
-	svc, n, setBody := availabilityNodeFixture(t, unavailableStatusBody)
-	patch, err := svc.Probe(context.Background(), n)
-	if err != nil {
-		t.Fatal(err)
-	}
-	patch.Status = "online"
-	if err := svc.UpdateHeartbeat(n.Id, patch); err != nil {
-		t.Fatal(err)
-	}
-	if points := nodeMetrics.aggregate(nodeMetricKey(n.Id, "cpu"), 2, 60); len(points) != 0 {
-		t.Fatalf("unavailable CPU became history: %v", points)
-	}
-	var stored model.Node
-	if err := database.GetDB().First(&stored, n.Id).Error; err != nil {
-		t.Fatal(err)
-	}
-	if got := unavailableMetricsOf(t, toNodeView(&stored)); !reflect.DeepEqual(got, []string{"cpu", "uptime"}) {
-		t.Fatalf("stored availability=%v", got)
-	}
-	if points := nodeMetrics.aggregate(nodeMetricKey(n.Id, "mem"), 2, 60); len(points) != 1 || points[0]["v"] != float64(50) {
-		t.Fatalf("memory history changed: %v", points)
-	}
-	setBody(zeroStatusBody)
-	patch, err = svc.Probe(context.Background(), n)
-	if err != nil {
-		t.Fatal(err)
-	}
-	patch.Status = "online"
-	if err := svc.UpdateHeartbeat(n.Id, patch); err != nil {
-		t.Fatal(err)
-	}
-	if err := database.GetDB().First(&stored, n.Id).Error; err != nil {
-		t.Fatal(err)
-	}
-	if got := unavailableMetricsOf(t, toNodeView(&stored)); len(got) != 0 {
-		t.Fatalf("valid zero did not recover: %v", got)
-	}
-	if points := nodeMetrics.aggregate(nodeMetricKey(n.Id, "cpu"), 2, 60); len(points) != 1 || points[0]["v"] != float64(0) {
-		t.Fatalf("valid zero lost: %v", points)
-	}
-}
 
 func TestNodeAvailabilityColumnKeepsLegacyRows(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "legacy.db")

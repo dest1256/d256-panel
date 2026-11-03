@@ -372,26 +372,6 @@ export const EXAMPLES: Record<string, unknown> = {
     "webListen": "",
     "webPort": 1
   },
-  "AmneziaWGLogs": {
-    "events": [
-      "2025/01/01 12:00:00 amneziawg: started interface awg1 for inbound 1"
-    ],
-    "peers": [
-      {
-        "allowedIPs": "10.8.1.2/32",
-        "down": 4194304,
-        "email": "peer@example.com",
-        "endpoint": "203.0.113.9:51820",
-        "handshake": 1735732800000,
-        "inboundId": 1,
-        "interface": "awg1",
-        "online": true,
-        "tag": "inbound-51820",
-        "up": 1048576
-      }
-    ],
-    "running": true
-  },
   "ApiToken": {
     "createdAt": 0,
     "enabled": false,
@@ -409,10 +389,6 @@ export const EXAMPLES: Record<string, unknown> = {
     "name": "central-panel-a",
     "scope": "admin",
     "token": "new-token-string"
-  },
-  "Blocker": {
-    "code": "tools",
-    "detail": "awg"
   },
   "Client": {
     "adTag": "0123456789abcdef0123456789abcdef",
@@ -864,7 +840,6 @@ export const EXAMPLES: Record<string, unknown> = {
     "xver": 0
   },
   "InboundOption": {
-    "awgServer": null,
     "enable": true,
     "id": 1,
     "listen": "",
@@ -922,6 +897,8 @@ export const EXAMPLES: Record<string, unknown> = {
     "activeCount": 23,
     "address": "node1.example.com",
     "allowPrivateAddress": false,
+    "appliedVersion": 0,
+    "applyError": "",
     "basePath": "/",
     "clientCount": 27,
     "configDirty": false,
@@ -929,6 +906,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "cpuPct": 23.5,
     "createdAt": 1700000000,
     "depletedCount": 1,
+    "desiredVersion": 0,
     "disabledCount": 3,
     "enable": true,
     "enrolledAt": 0,
@@ -1000,47 +978,22 @@ export const EXAMPLES: Record<string, unknown> = {
     "xrayState": "not_configured",
     "xrayVersion": "26.3.27"
   },
-  "NodeMutationRequest": {
-    "address": "",
-    "allowPrivateAddress": false,
-    "apiToken": null,
-    "basePath": "",
-    "clearApiToken": false,
-    "enable": false,
-    "id": 0,
-    "inboundSyncMode": "all",
-    "inboundTags": [
-      ""
-    ],
-    "name": "",
-    "outboundTag": "",
-    "pinnedCertSha256": "",
-    "port": 1,
-    "remark": "",
-    "scheme": "http",
-    "tlsVerifyMode": "verify"
-  },
   "NodeView": {
     "activeCount": 20,
     "address": "node.example.com",
-    "allowPrivateAddress": false,
-    "basePath": "/",
+    "appliedVersion": 7,
+    "applyError": "",
     "clientCount": 25,
-    "configDirty": false,
-    "configDirtyAt": 0,
     "cpuPct": 12.5,
     "createdAt": 1700000000,
     "depletedCount": 1,
+    "desiredVersion": 7,
     "disabledCount": 2,
     "enable": true,
+    "enrolledAt": 1700000000,
     "guid": "node-guid",
-    "hasApiToken": true,
     "id": 1,
     "inboundCount": 3,
-    "inboundSyncMode": "all",
-    "inboundTags": [
-      "in-443-tcp"
-    ],
     "lastError": "",
     "lastHeartbeat": 1700000000,
     "latencyMs": 42,
@@ -1049,16 +1002,10 @@ export const EXAMPLES: Record<string, unknown> = {
     "netDown": 1048576,
     "netUp": 2097152,
     "onlineCount": 5,
-    "outboundTag": "direct",
-    "panelVersion": "v3.x.x",
-    "parentGuid": "",
-    "pinnedCertSha256": "",
-    "port": 2053,
+    "panelVersion": "v0.1.0",
+    "protoVersion": 1,
     "remark": "Primary edge",
-    "scheme": "https",
     "status": "online",
-    "tlsVerifyMode": "verify",
-    "transitive": false,
     "unavailableMetrics": [
       ""
     ],
@@ -1066,7 +1013,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "uptimeSecs": 86400,
     "xrayError": "",
     "xrayState": "running",
-    "xrayVersion": "25.10.31"
+    "xrayVersion": "26.3.27"
   },
   "OutboundTraffics": {
     "down": 0,
@@ -1080,43 +1027,6 @@ export const EXAMPLES: Record<string, unknown> = {
     "finishedAt": 1735689612,
     "runId": "1735689600123456789",
     "state": "success"
-  },
-  "PeerActivity": {
-    "allowedIPs": "10.8.1.2/32",
-    "down": 4194304,
-    "email": "peer@example.com",
-    "endpoint": "203.0.113.9:51820",
-    "handshake": 1735732800000,
-    "inboundId": 1,
-    "interface": "awg1",
-    "online": true,
-    "tag": "inbound-51820",
-    "up": 1048576
-  },
-  "ProbeResultUI": {
-    "cpuPct": 12.5,
-    "error": "",
-    "latencyMs": 42,
-    "memPct": 45.2,
-    "panelVersion": "v3.x.x",
-    "status": "online",
-    "unavailableMetrics": [
-      ""
-    ],
-    "uptimeSecs": 86400,
-    "xrayError": "",
-    "xrayState": "",
-    "xrayVersion": "25.10.31"
-  },
-  "Readiness": {
-    "blockers": [
-      {
-        "code": "tools",
-        "detail": "awg"
-      }
-    ],
-    "installCommand": "sudo /usr/local/x-ui/x-ui install-awg-kernel",
-    "ready": false
   },
   "RealityScanResult": {
     "alpn": "h2",
@@ -1143,83 +1053,10 @@ export const EXAMPLES: Record<string, unknown> = {
     "tlsVersion": "1.3",
     "x25519": true
   },
-  "ServerSettings": {
-    "contentPaddingAddition": "",
-    "disableCookies": false,
-    "externalInterface": "",
-    "h1": "",
-    "h2": "",
-    "h3": "",
-    "h4": "",
-    "headerProtectionKey": "",
-    "i1": "",
-    "i2": "",
-    "i3": "",
-    "i4": "",
-    "i5": "",
-    "ipv6Enabled": false,
-    "ipv6ExternalInterface": "",
-    "ipv6Subnet": "",
-    "jc": 0,
-    "jmax": 0,
-    "jmin": 0,
-    "keepaliveTimeout": "",
-    "kernelMode": false,
-    "maxHandshakeAttempts": "",
-    "mtu": 0,
-    "primaryDns": "",
-    "privateKey": "",
-    "publicKey": "",
-    "randomTrailers": false,
-    "rejectAfterTime": "",
-    "rekeyAfterTime": "",
-    "rekeyTimeout": "",
-    "routeThroughXray": false,
-    "s1": 0,
-    "s2": 0,
-    "s3": 0,
-    "s4": 0,
-    "secondaryDns": "",
-    "subnetCidr": 0,
-    "subnetIp": ""
-  },
   "Setting": {
     "id": 0,
     "key": "",
     "value": ""
-  },
-  "Sponsor": {
-    "enable": true,
-    "from": "2026-10-01T00:00:00Z",
-    "id": "acme-2026-10",
-    "link": "https://acme.example/?utm_source=3x-ui",
-    "logo": "/sponsors/logo/acme.png",
-    "name": "Acme VPS",
-    "slots": [
-      ""
-    ],
-    "text": {},
-    "title": {},
-    "until": "2026-11-01T00:00:00Z"
-  },
-  "SponsorList": {
-    "contact": "https://t.me/example",
-    "sponsors": [
-      {
-        "enable": true,
-        "from": "2026-10-01T00:00:00Z",
-        "id": "acme-2026-10",
-        "link": "https://acme.example/?utm_source=3x-ui",
-        "logo": "/sponsors/logo/acme.png",
-        "name": "Acme VPS",
-        "slots": [
-          ""
-        ],
-        "text": {},
-        "title": {},
-        "until": "2026-11-01T00:00:00Z"
-      }
-    ]
   },
   "SubBalancer": {
     "createdAt": 1710000000000,
@@ -1234,12 +1071,6 @@ export const EXAMPLES: Record<string, unknown> = {
     "sortOrder": 1,
     "strategy": "random",
     "updatedAt": 1710000000000
-  },
-  "TgBotCapabilities": {
-    "groupPrivacy": false,
-    "inlineEnabled": true,
-    "running": true,
-    "username": "xui_bot"
   },
   "Traffic": {
     "Down": 2097152,

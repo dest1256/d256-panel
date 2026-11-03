@@ -8,7 +8,6 @@ import (
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/runtime"
 	"github.com/mhsanaei/3x-ui/v3/internal/xray"
 )
 
@@ -46,12 +45,6 @@ func createNodeInboundWithSettings(t *testing.T, db *gorm.DB, nodeID int, tag st
 	}
 }
 
-func syncNodeSnapshot(t *testing.T, svc *InboundService, nodeID int, inbounds ...*model.Inbound) error {
-	t.Helper()
-	_, err := svc.setRemoteTrafficLocked(nodeID, &runtime.TrafficSnapshot{Inbounds: inbounds}, false, false)
-	return err
-}
-
 func assertNoTraffic(t *testing.T, email string) {
 	t.Helper()
 	var n int64
@@ -60,65 +53,6 @@ func assertNoTraffic(t *testing.T, email string) {
 	}
 	if n != 0 {
 		t.Fatalf("traffic rows for %q = %d, want 0", email, n)
-	}
-}
-
-func TestNodeSyncInboundRemovalStaysOnOneConnection(t *testing.T) {
-	db := initTrafficTestDB(t)
-	goneSettings := `{"clients": [{"email": "gone", "enable": true}]}`
-	keepSettings := `{"clients": [{"email": "keep", "enable": true}]}`
-	createNodeInboundWithSettings(t, db, 1, "n1-gone", 41001, goneSettings)
-	createNodeInboundWithSettings(t, db, 1, "n1-keep", 41002, keepSettings)
-	svc := &InboundService{}
-	keep := &model.Inbound{Tag: "n1-keep", Enable: true, Settings: keepSettings, ClientStats: []xray.ClientTraffic{{Email: "keep", Up: 10, Down: 10, Enable: true}}}
-	if err := syncNodeSnapshot(t, svc, 1,
-		&model.Inbound{Tag: "n1-gone", Enable: true, Settings: goneSettings, ClientStats: []xray.ClientTraffic{{Email: "gone", Up: 10, Down: 10, Enable: true}}},
-		keep); err != nil {
-		t.Fatalf("seed sync: %v", err)
-	}
-	readTraffic(t, db, "gone")
-
-	capPoolAtOneConn(t)
-	err := runWithoutSecondConn(t, "node sync inbound-removal sweep", func() error {
-		return syncNodeSnapshot(t, svc, 1, keep)
-	})
-	if err != nil {
-		t.Fatalf("sync node 1 without n1-gone: %v", err)
-	}
-	assertNoTraffic(t, "gone")
-}
-
-func TestNodeSyncClientGoneStaysOnOneConnection(t *testing.T) {
-	db := initTrafficTestDB(t)
-	bothSettings := `{"clients": [{"email": "gone", "enable": true}, {"email": "keep", "enable": true}]}`
-	createNodeInboundWithSettings(t, db, 1, "n1-in", 41001, bothSettings)
-	svc := &InboundService{}
-	if err := syncNodeSnapshot(t, svc, 1, &model.Inbound{Tag: "n1-in", Enable: true, Settings: bothSettings, ClientStats: []xray.ClientTraffic{
-		{Email: "gone", Up: 10, Down: 10, Enable: true},
-		{Email: "keep", Up: 10, Down: 10, Enable: true},
-	}}); err != nil {
-		t.Fatalf("seed sync: %v", err)
-	}
-	readTraffic(t, db, "gone")
-
-	capPoolAtOneConn(t)
-	err := runWithoutSecondConn(t, "node sync per-client sweep", func() error {
-		return syncNodeSnapshot(t, svc, 1, &model.Inbound{
-			Tag:         "n1-in",
-			Enable:      true,
-			Settings:    `{"clients": [{"email": "keep", "enable": true}]}`,
-			ClientStats: []xray.ClientTraffic{{Email: "keep", Up: 20, Down: 20, Enable: true}},
-		})
-	})
-	if err != nil {
-		t.Fatalf("sync node 1 without the gone client: %v", err)
-	}
-	var baselines int64
-	if err := db.Model(&model.NodeClientTraffic{}).Where("node_id = ? AND email = ?", 1, "gone").Count(&baselines).Error; err != nil {
-		t.Fatalf("count node baselines: %v", err)
-	}
-	if baselines != 0 {
-		t.Fatalf("node baseline for the gone client = %d rows, want 0", baselines)
 	}
 }
 

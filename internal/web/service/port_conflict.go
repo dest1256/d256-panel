@@ -7,8 +7,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/amneziawg"
-	"github.com/mhsanaei/3x-ui/v3/internal/amneziawgnet"
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/tuic"
@@ -127,21 +125,6 @@ var loopbackBind = bindAddr{listen: "127.0.0.1"}
 
 func inboundBindAddr(ib *model.Inbound) bindAddr {
 	return bindAddr{listen: ib.Listen, v6only: streamV6Only(ib.StreamSettings)}
-}
-
-func amneziawgKernelMode(ib *model.Inbound) bool {
-	if ib == nil || ib.Protocol != model.AmneziaWG {
-		return false
-	}
-	return amneziawgKernelModeSettings(ib.Settings)
-}
-
-func amneziawgKernelModeSettings(raw string) bool {
-	var settings amneziawg.InboundSettings
-	if err := json.Unmarshal([]byte(raw), &settings); err != nil || settings.Server == nil {
-		return false
-	}
-	return settings.Server.KernelMode
 }
 
 func streamV6Only(streamSettings string) bool {
@@ -295,18 +278,6 @@ func checkPortConflictTx(db *gorm.DB, inbound *model.Inbound, ignoreId int) (*po
 		}, nil
 	}
 
-	// Egress SOCKS server holds loopback EgressPort when AWG outbounds are
-	// active; conflict check prevents inbounds from colliding with it.
-	if inbound.NodeID == nil && inbound.Port == amneziawgnet.EgressPort() &&
-		newBits&transportTCP != 0 && listenOverlaps(loopbackBind, inboundBindAddr(inbound)) {
-		return &portConflictDetail{
-			Tag:        "amneziawg-egress",
-			Listen:     "127.0.0.1",
-			Port:       inbound.Port,
-			Transports: transportTCP,
-		}, nil
-	}
-
 	// Local embedded inbounds reserve an automatically assigned Xray SOCKS relay port.
 	if inbound.NodeID == nil && listenOverlaps(loopbackBind, inboundBindAddr(inbound)) {
 		conflict, err := checkAmneziawgnetSocksConflict(db, inbound, ignoreId, newBits)
@@ -405,152 +376,6 @@ func checkPortConflictTx(db *gorm.DB, inbound *model.Inbound, ignoreId int) (*po
 			Listen:     c.Listen,
 			Port:       c.Port,
 			Transports: shared,
-		}, nil
-	}
-	return nil, nil
-}
-
-// amneziawgForwardedPortOwner names the AmneziaWG row on the same host whose peer
-// forwards inbound's port -- a bind on every interface that only the AWG side checked.
-func amneziawgForwardedPortOwner(db *gorm.DB, inbound *model.Inbound, ignoreId int) (*portConflictDetail, error) {
-	var rows []*model.Inbound
-	q := db.Model(model.Inbound{}).Where("protocol = ?", model.AmneziaWG)
-	if ignoreId > 0 {
-		q = q.Where("id != ?", ignoreId)
-	}
-	if err := q.Find(&rows).Error; err != nil {
-		return nil, err
-	}
-	for _, row := range rows {
-		if !sameNode(row.NodeID, inbound.NodeID) {
-			continue
-		}
-		if amneziawgKernelMode(row) {
-			continue
-		}
-		instance, ok := amneziawg.InstanceFromInbound(row)
-		if !ok {
-			continue
-		}
-		email, forwards := amneziawgnet.ForwardedPortOwner(instance, inbound.Port)
-		if !forwards {
-			continue
-		}
-		return &portConflictDetail{
-			InboundID: row.Id,
-			Remark:    row.Remark,
-			Tag:       row.Tag,
-			// the forward binds :port on every interface, wherever the
-			// candidate asked to listen.
-			Listen:      "",
-			Port:        inbound.Port,
-			ForwardedBy: email,
-		}, nil
-	}
-	return nil, nil
-}
-
-// checkAmneziawgnetSocksConflict checks the embedded relay port each local row reserves.
-func checkAmneziawgnetSocksConflict(db *gorm.DB, inbound *model.Inbound, ignoreId int, newBits transportBits) (*portConflictDetail, error) {
-	// A disabled row still owns the slot its id derives: SetInboundEnable flips
-	// the column with no port check, so enabling it later must not collide.
-	var candidates []*model.Inbound
-	q := db.Model(model.Inbound{}).Where("protocol = ? AND node_id IS NULL", model.AmneziaWG)
-	if ignoreId > 0 {
-		q = q.Where("id != ?", ignoreId)
-	}
-	if err := q.Find(&candidates).Error; err != nil {
-		return nil, err
-	}
-	// The row reserves its slot before its first peer is added.
-	for _, c := range candidates {
-		if amneziawgKernelMode(c) {
-			continue
-		}
-		if amneziawgnet.SOCKSPortForInbound(c.Id) != inbound.Port {
-			continue
-		}
-		return &portConflictDetail{
-			InboundID:  c.Id,
-			Remark:     c.Remark,
-			Tag:        c.Tag,
-			Listen:     "127.0.0.1",
-			Port:       inbound.Port,
-			Transports: newBits,
-		}, nil
-	}
-	return nil, nil
-}
-
-// checkAmneziawgnetSocksRelayCollision reports whether id's embedded relay port
-// is already claimed by another local AmneziaWG inbound, including disabled rows.
-func checkAmneziawgnetSocksRelayCollision(db *gorm.DB, id int) (*portConflictDetail, error) {
-	relayPort := amneziawgnet.SOCKSPortForInbound(id)
-	var candidates []*model.Inbound
-	if err := db.Model(model.Inbound{}).
-		Where("protocol = ? AND node_id IS NULL AND id != ?", model.AmneziaWG, id).
-		Find(&candidates).Error; err != nil {
-		return nil, err
-	}
-	for _, c := range candidates {
-		if amneziawgKernelMode(c) {
-			continue
-		}
-		if amneziawgnet.SOCKSPortForInbound(c.Id) != relayPort {
-			continue
-		}
-		return &portConflictDetail{
-			InboundID:  c.Id,
-			Remark:     c.Remark,
-			Tag:        c.Tag,
-			Listen:     "127.0.0.1",
-			Port:       relayPort,
-			Relay:      true,
-			Transports: transportTCP,
-		}, nil
-	}
-	return nil, nil
-}
-
-// amneziawgnetSocksSelfConflict: a row's own WireGuard port vs the relay port its
-// own id derives -- all three checks below exclude that id, so nothing else does.
-func amneziawgnetSocksSelfConflict(inbound *model.Inbound, id int) string {
-	if id <= 0 || inbound.NodeID != nil || amneziawgKernelMode(inbound) || !listenOverlaps(loopbackBind, inboundBindAddr(inbound)) {
-		return ""
-	}
-	relayPort := amneziawgnet.SOCKSPortForInbound(id)
-	if inbound.Port != relayPort {
-		return ""
-	}
-	return fmt.Sprintf("WireGuard port %d is inbound #%d's own SOCKS5 relay port on 127.0.0.1; choose a different WireGuard port",
-		relayPort, id)
-}
-
-// checkAmneziawgnetSocksReverseConflict mirrors checkAmneziawgnetSocksConflict:
-// does id's own derived relay port collide with some other inbound's port.
-func checkAmneziawgnetSocksReverseConflict(db *gorm.DB, id int) (*portConflictDetail, error) {
-	relayPort := amneziawgnet.SOCKSPortForInbound(id)
-	var candidates []*model.Inbound
-	if err := db.Model(model.Inbound{}).
-		Where("port = ? AND node_id IS NULL AND id != ?", relayPort, id).
-		Find(&candidates).Error; err != nil {
-		return nil, err
-	}
-	for _, c := range candidates {
-		if amneziawgKernelMode(c) {
-			continue
-		}
-		if !listenOverlaps(loopbackBind, inboundBindAddr(c)) {
-			continue
-		}
-		return &portConflictDetail{
-			InboundID:  c.Id,
-			Remark:     c.Remark,
-			Tag:        c.Tag,
-			Listen:     c.Listen,
-			Port:       relayPort,
-			Relay:      true,
-			Transports: transportTCP,
 		}, nil
 	}
 	return nil, nil

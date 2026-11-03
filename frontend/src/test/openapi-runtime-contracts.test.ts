@@ -137,21 +137,6 @@ describe('generated OpenAPI runtime contracts', () => {
   });
 
   it('uses the runtime REST response schemas', () => {
-    expect(responseObjectSchema('/panel/api/server/logs/{count}', 'post')).toEqual({
-      type: 'array',
-      nullable: true,
-      items: { type: 'string' },
-    });
-    expect(responseObjectSchema('/panel/api/server/xraylogs/{count}', 'post')).toEqual({
-      type: 'array',
-      nullable: true,
-      items: { $ref: '#/components/schemas/LogEntry' },
-    });
-    expect(
-      operation('/panel/api/server/xraylogs/{count}', 'post').responses['200'].content?.[
-        'application/json'
-      ].example,
-    ).toEqual({ success: true, obj: [EXAMPLES.LogEntry] });
     expect(responseObjectSchema('/panel/api/server/getNewUUID')).toEqual({
       $ref: '#/components/schemas/NewUUIDResponse',
     });

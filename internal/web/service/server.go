@@ -4,7 +4,6 @@ import (
 	"archive/zip"
 	"bufio"
 	"bytes"
-	"cmp"
 	"context"
 	"crypto/sha256"
 	"crypto/x509"
@@ -32,9 +31,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/amneziawg"
-	"github.com/mhsanaei/3x-ui/v3/internal/amneziawgkern"
-	"github.com/mhsanaei/3x-ui/v3/internal/amneziawgnet"
 	"github.com/mhsanaei/3x-ui/v3/internal/config"
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
@@ -752,14 +748,6 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 	}
 	status.Xray.Version = s.xrayService.GetXrayVersion()
 
-	var amneziawgCount int64
-	if err := database.GetDB().Model(model.Inbound{}).
-		Where("protocol = ? AND enable = ? AND node_id IS NULL", model.AmneziaWG, true).
-		Count(&amneziawgCount).Error; err != nil {
-		logger.Warning("count amneziawg inbounds failed:", err)
-	}
-	status.AmneziaWG.Configured = amneziawgCount > 0
-	status.AmneziaWG.Running = amneziawgnet.GetManager().HasRunning() || amneziawgkern.GetManager().HasRunning()
 
 	status.PanelVersion = config.GetPanelVersion()
 	if guid, err := s.settingService.GetPanelGuid(); err == nil {
@@ -1378,93 +1366,6 @@ func clampUint64ToInt64(v uint64) int64 {
 		return math.MaxInt64
 	}
 	return int64(v)
-}
-
-func amneziawgLogActivity() []PeerActivity {
-	var inbounds []*model.Inbound
-	if err := database.GetDB().
-		Where("protocol = ? AND enable = ? AND node_id IS NULL", model.AmneziaWG, true).
-		Find(&inbounds).Error; err != nil {
-		logger.Warning("amneziawg logs: list inbounds failed:", err)
-		return nil
-	}
-
-	now := time.Now()
-	var out []PeerActivity
-	for _, inbound := range inbounds {
-		inst, ok := amneziawg.InstanceFromInbound(inbound)
-		if !ok {
-			continue
-		}
-		diag := amneziawgnet.Diagnose(inbound.Id, inst.Peers)
-		if !diag.Running {
-			continue
-		}
-		for _, cd := range diag.Clients {
-			var handshakeMs int64
-			online := false
-			if !cd.LastHandshake.IsZero() {
-				handshakeMs = cd.LastHandshake.UnixMilli()
-				online = now.Sub(cd.LastHandshake) < amneziawgOnlineWindow
-			}
-			out = append(out, PeerActivity{
-				Interface:  inst.InterfaceName,
-				Tag:        inbound.Tag,
-				InboundId:  inbound.Id,
-				Email:      cd.Email,
-				Endpoint:   cd.Endpoint,
-				AllowedIPs: cd.AllowedIPs,
-				Handshake:  handshakeMs,
-				Up:         clampUint64ToInt64(cd.RxBytes),
-				Down:       clampUint64ToInt64(cd.TxBytes),
-				Online:     online,
-			})
-		}
-	}
-	slices.SortFunc(out, func(a, b PeerActivity) int {
-		if a.Handshake != b.Handshake {
-			return cmp.Compare(b.Handshake, a.Handshake)
-		}
-		return strings.Compare(a.Email, b.Email)
-	})
-	return out
-}
-
-// GetAmneziaWGLogs returns at most count peer rows and count event lines,
-// optionally narrowed to rows whose text contains filter (case-insensitive),
-// mirroring GetXrayLogs' own count+filter contract.
-func (s *ServerService) GetAmneziaWGLogs(count string, filter string) *AmneziaWGLogs {
-	limit, err := strconv.Atoi(count)
-	if err != nil || limit < 1 || limit > 10000 {
-		limit = 100
-	}
-	needle := strings.ToLower(strings.TrimSpace(filter))
-
-	logs := &AmneziaWGLogs{Peers: []PeerActivity{}, Events: []string{}, Running: amneziawgnet.GetManager().HasRunning()}
-
-	for _, peer := range amneziawgLogActivity() {
-		if len(logs.Peers) >= limit {
-			break
-		}
-		if needle != "" && !strings.Contains(strings.ToLower(peer.Email+" "+peer.Tag+" "+peer.Interface+" "+peer.Endpoint+" "+peer.AllowedIPs), needle) {
-			continue
-		}
-		logs.Peers = append(logs.Peers, peer)
-	}
-
-	for _, line := range logger.GetLogs(10000, "debug") {
-		if len(logs.Events) >= limit {
-			break
-		}
-		if !strings.Contains(strings.ToLower(line), amneziawgEventMarker) {
-			continue
-		}
-		if needle != "" && !strings.Contains(strings.ToLower(line), needle) {
-			continue
-		}
-		logs.Events = append(logs.Events, line)
-	}
-	return logs
 }
 
 func (s *ServerService) GetXrayLogs(

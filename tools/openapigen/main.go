@@ -106,13 +106,9 @@ func run(root, outDir string) error {
 				"NewUUIDResponse",
 				"MLDSA65Response",
 				"MLKEM768Response",
-				"NodeMutationRequest",
 				"NodeView",
-				"ProbeResultUI",
 				"RealityScanResult",
 				"GeodataTokenIssue",
-				"AmneziaWGLogs",
-				"PeerActivity",
 				"HwidSlotStatus",
 			),
 		},
@@ -122,16 +118,7 @@ func run(root, outDir string) error {
 		},
 		{
 			Path:        resolveRel(root, "internal/web/controller"),
-			StructAllow: setOf("TgBotCapabilities", "NodeLive", "NodeEnrollResponse"),
-		},
-		{
-			Path:        resolveRel(root, "internal/amneziawg"),
-			StructAllow: setOf("ServerSettings"),
-		},
-		{
-			Path:        resolveRel(root, "internal/amneziawgkern"),
-			StructAllow: setOf("Readiness", "Blocker"),
-			AliasAllow:  setOf("BlockerCode"),
+			StructAllow: setOf("NodeLive", "NodeEnrollResponse"),
 		},
 		{
 			Path:        resolveRel(root, "internal/tuic"),

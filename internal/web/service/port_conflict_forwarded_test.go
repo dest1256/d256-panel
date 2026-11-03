@@ -8,45 +8,6 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 )
 
-// checkForwardedPortsConflict only ran from the AmneziaWG save path, so an
-// ordinary inbound could take a port a peer forwards on every interface.
-func TestAddInboundRefusesAPortAnAmneziaWGPeerForwards(t *testing.T) {
-	const forwarded = 8443
-	cases := []struct {
-		name    string
-		port    int
-		wantErr bool
-	}{
-		{"the forwarded port", forwarded, true},
-		{"a free port", forwarded + 1, false},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			setupConflictDB(t)
-			seedInboundConflict(t, "awg-forward", "0.0.0.0", 51820, model.AmneziaWG, ``,
-				awgRelayWindowSettingsWithForward(t, "awg-forward", "8443"))
-
-			_, _, err := (&InboundService{}).AddInbound(&model.Inbound{
-				Tag: "user-inbound", Enable: true, Listen: "0.0.0.0", Port: tc.port,
-				Protocol: model.VLESS, StreamSettings: `{"network":"tcp"}`, Settings: `{"clients":[]}`,
-			})
-			if !tc.wantErr {
-				if err != nil {
-					t.Fatalf("port %d is free; the create must be allowed: %v", tc.port, err)
-				}
-				return
-			}
-			if err == nil {
-				t.Fatalf("port %d is forwarded by a peer of another inbound; the create must be refused", tc.port)
-			}
-			if !strings.Contains(err.Error(), "awg-forward@relay-window") {
-				t.Fatalf("the refusal must name the peer holding the port, got %v", err)
-			}
-		})
-	}
-}
-
 // A peer the forward supervisor opens no listener for holds no port: it has no
 // email, or no address the tunnel can route to, and Reconcile skips it either way.
 func TestAddInboundAllowsAPortNoPeerCanActuallyForward(t *testing.T) {
@@ -84,25 +45,6 @@ func TestAddInboundAllowsAPortNoPeerCanActuallyForward(t *testing.T) {
 				t.Fatalf("nothing binds 8443 for this peer; the create must be allowed: %v", err)
 			}
 		})
-	}
-}
-
-// The refusal has to point at where the socket really is: the forward listens on
-// every interface, so repeating the candidate's requested address asserts a lie.
-func TestForwardedPortRefusalNamesTheWildcardBind(t *testing.T) {
-	setupConflictDB(t)
-	seedInboundConflict(t, "awg-forward", "0.0.0.0", 51820, model.AmneziaWG, ``,
-		awgRelayWindowSettingsWithForward(t, "awg-forward", "8443"))
-
-	_, _, err := (&InboundService{}).AddInbound(&model.Inbound{
-		Tag: "user-inbound", Enable: true, Listen: "10.0.0.5", Port: 8443,
-		Protocol: model.VLESS, StreamSettings: `{"network":"tcp"}`, Settings: `{"clients":[]}`,
-	})
-	if err == nil {
-		t.Fatal("the port is forwarded on every interface, including 10.0.0.5; the create must be refused")
-	}
-	if !strings.Contains(err.Error(), " on * by its client ") {
-		t.Fatalf("the refusal must place the forward on every interface, got %v", err)
 	}
 }
 

@@ -16,11 +16,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/amneziawg"
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/mtproto"
 	"github.com/mhsanaei/3x-ui/v3/internal/tuic"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/maskcompat"
@@ -344,11 +342,7 @@ type InboundOption struct {
 	WgMtu          int    `json:"wgMtu,omitempty"`
 	WgDns          string `json:"wgDns,omitempty"`
 	MtprotoDomain  string `json:"mtprotoDomain,omitempty"`
-	// AwgServer carries the full AmneziaWG server block (keys, subnet,
-	// obfuscation params) so the clients page can render a downloadable
-	// per-client .conf without a second round trip.
-	AwgServer  *amneziawg.ServerSettings `json:"awgServer,omitempty"`
-	TuicServer *tuic.TuicServerSettings  `json:"tuicServer,omitempty"`
+	TuicServer *tuic.TuicServerSettings `json:"tuicServer,omitempty"`
 	// Hosting node; nil for this panel's own inbounds. Lets the clients
 	// page map a node filter onto inbound IDs (#4997).
 	NodeId *int `json:"nodeId,omitempty"`
@@ -414,7 +408,6 @@ func (s *InboundService) GetInboundOptions(userId int) ([]InboundOption, error) 
 			WgMtu:             wgMtu,
 			WgDns:             wgDns,
 			MtprotoDomain:     inboundMtprotoDomain(r.Protocol, r.Settings),
-			AwgServer:         inboundAmneziaWGServer(r.Protocol, r.Settings),
 			TuicServer:        inboundTuicServer(r.Protocol, r.Settings),
 			NodeId:            r.NodeId,
 			NodeAddress:       r.NodeAddress,
@@ -488,26 +481,6 @@ func inboundWireguardHints(protocol string, settings string) (string, int, strin
 		}
 	}
 	return publicKey, parsed.MTU, parsed.DNS
-}
-
-// inboundAmneziaWGServer returns the AmneziaWG server block for the clients
-// page's config-download builder, or nil when the inbound isn't AmneziaWG or
-// its settings don't parse. PrivateKey is redacted: GetInboundOptions is a
-// shared, admin-wide list used to fill dropdowns, not a place a live tunnel
-// secret needs to travel — the frontend's own AwgServerOptionSchema never
-// reads it, so nothing is lost by not sending it, and it shouldn't widen the
-// blast radius of a log capture, proxy cache, or browser devtools screenshot.
-func inboundAmneziaWGServer(protocol string, settings string) *amneziawg.ServerSettings {
-	if protocol != string(model.AmneziaWG) || strings.TrimSpace(settings) == "" {
-		return nil
-	}
-	var parsed amneziawg.InboundSettings
-	if err := json.Unmarshal([]byte(settings), &parsed); err != nil || parsed.Server == nil {
-		return nil
-	}
-	redacted := *parsed.Server
-	redacted.PrivateKey = ""
-	return &redacted
 }
 
 func inboundTuicServer(protocol string, settings string) *tuic.TuicServerSettings {
@@ -1192,83 +1165,6 @@ func parseRouteXrayPort(settings string) int {
 		return 0
 	}
 	return settingsRouteXrayPort(parsed)
-}
-
-// normalizeMtprotoXrayPort guarantees a routed mtproto inbound carries a stable
-// loopback egress port in its settings, so the generated Xray SOCKS bridge and
-// the mtg sidecar agree on where mtg dials out. The port is backend-owned: it is
-// allocated once when routing is first enabled and preserved across edits
-// (carried over from oldSettings, which wins over any value the client echoed
-// back). When routing is off it — together with the now-inert outbound
-// selection — is stripped so a disabled bridge leaves nothing stale behind.
-//
-// It returns an error when an egress port cannot be allocated or persisted, so
-// the caller refuses the save rather than storing a routed-but-portless inbound,
-// which would otherwise route no traffic and have its mtg metrics skipped (see
-// mtproto_job) — silently losing its accounting.
-func (s *InboundService) normalizeMtprotoXrayPort(inbound *model.Inbound, oldSettings string) error {
-	if inbound.Protocol != model.MTProto {
-		return nil
-	}
-	var parsed map[string]any
-	if err := json.Unmarshal([]byte(inbound.Settings), &parsed); err != nil || parsed == nil {
-		return nil
-	}
-	routed, _ := parsed["routeThroughXray"].(bool)
-	if !routed {
-		_, hadPort := parsed["routeXrayPort"]
-		_, hadTag := parsed["outboundTag"]
-		if !hadPort && !hadTag {
-			return nil
-		}
-		delete(parsed, "routeXrayPort")
-		delete(parsed, "outboundTag")
-		if bs, err := json.MarshalIndent(parsed, "", "  "); err == nil {
-			inbound.Settings = string(bs)
-		} else {
-			logger.Warning("mtproto: failed to marshal settings after disabling routing:", err)
-		}
-		return nil
-	}
-
-	// Prefer the already-stored port (carried across edits), then any value the
-	// client sent, then allocate a fresh one.
-	port := parseRouteXrayPort(oldSettings)
-	if inbound.NodeID != nil {
-		// The port is free or taken on the node's host, not here: the node's own
-		// panel allocates it, and node sync brings its choice back as oldSettings.
-		if port <= 0 {
-			delete(parsed, "routeXrayPort")
-		} else {
-			parsed["routeXrayPort"] = port
-		}
-		bs, err := json.MarshalIndent(parsed, "", "  ")
-		if err != nil {
-			return common.NewError("mtproto: could not persist the Xray egress port:", err)
-		}
-		inbound.Settings = string(bs)
-		return nil
-	}
-	if port <= 0 {
-		port = settingsRouteXrayPort(parsed)
-	}
-	if port <= 0 {
-		allocated, err := mtproto.FreeLocalPort()
-		if err != nil {
-			return common.NewError("mtproto: could not allocate an Xray egress port:", err)
-		}
-		port = allocated
-	}
-	if settingsRouteXrayPort(parsed) == port {
-		return nil
-	}
-	parsed["routeXrayPort"] = port
-	bs, err := json.MarshalIndent(parsed, "", "  ")
-	if err != nil {
-		return common.NewError("mtproto: could not persist the Xray egress port:", err)
-	}
-	inbound.Settings = string(bs)
-	return nil
 }
 
 // AddInbound creates a new inbound configuration.
