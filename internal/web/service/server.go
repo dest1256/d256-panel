@@ -1,8 +1,6 @@
 package service
 
 import (
-	"archive/zip"
-	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -13,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"mime/multipart"
 	stdnet "net"
 	"net/http"
@@ -25,7 +22,6 @@ import (
 	"regexp"
 	"runtime"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -144,7 +140,6 @@ type Release struct {
 type ServerService struct {
 	lxcMetrics sys.LXCReader
 
-	xrayService        XrayService
 	inboundService     InboundService
 	settingService     SettingService
 	cachedIPv4         string
@@ -165,23 +160,10 @@ type ServerService struct {
 	lastStatus   *Status
 	coldStatusMu sync.Mutex
 
-	versionsCacheMu sync.Mutex
-	versionsCache   *cachedXrayVersions
-
 	fail2banMu        sync.Mutex
 	fail2banInstalled bool
 	fail2banCheckedAt time.Time
 }
-
-type cachedXrayVersions struct {
-	versions  []string
-	fetchedAt time.Time
-}
-
-// xrayVersionsCacheTTL bounds how often /getXrayVersion hits GitHub. The list
-// is purely informational (rendered in the "switch Xray version" picker) so a
-// quarter-hour staleness window is fine and saves the API budget.
-const xrayVersionsCacheTTL = 15 * time.Minute
 
 // allowedHistoryBuckets is the bucket-second whitelist for time-series
 // aggregation endpoints (server + node metrics). Restricting it prevents
@@ -290,31 +272,6 @@ func (s *ServerService) RefreshStatus() *Status {
 	s.lastStatusMu.Unlock()
 	s.AppendStatusSample(time.Now(), next)
 	return next
-}
-
-// GetXrayVersionsCached wraps GetXrayVersions with a TTL cache. On fetch
-// failure we serve the last successful list (if any) so the UI doesn't go
-// blank during a GitHub API hiccup; if there's no cache at all the underlying
-// error is surfaced.
-func (s *ServerService) GetXrayVersionsCached() ([]string, error) {
-	s.versionsCacheMu.Lock()
-	cache := s.versionsCache
-	s.versionsCacheMu.Unlock()
-	if cache != nil && time.Since(cache.fetchedAt) <= xrayVersionsCacheTTL {
-		return cache.versions, nil
-	}
-	versions, err := s.GetXrayVersions()
-	if err != nil {
-		if cache != nil {
-			logger.Warning("GetXrayVersionsCached: serving stale list:", err)
-			return cache.versions, nil
-		}
-		return nil, err
-	}
-	s.versionsCacheMu.Lock()
-	s.versionsCache = &cachedXrayVersions{versions: versions, fetchedAt: time.Now()}
-	s.versionsCacheMu.Unlock()
-	return versions, nil
 }
 
 // GetDefaultLogOutboundTags scans the default Xray config for freedom and
@@ -730,23 +687,6 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 	s.resolvePublicIPsInBackground()
 	status.PublicIP.IPv4, status.PublicIP.IPv6 = s.publicIPs()
 
-	// Xray status
-	if s.xrayService.IsXrayRunning() {
-		status.Xray.State = Running
-		// A core that runs but was refused the new config is a fault the
-		// operator only ever sees here and in the node list.
-		status.Xray.ErrorMsg = s.xrayService.GetHeldBackConfig()
-	} else {
-		err := s.xrayService.GetXrayErr()
-		if err != nil {
-			status.Xray.State = Error
-		} else {
-			status.Xray.State = Stop
-		}
-		status.Xray.ErrorMsg = s.xrayService.GetXrayResult()
-	}
-	status.Xray.Version = s.xrayService.GetXrayVersion()
-
 	status.PanelVersion = config.GetPanelVersion()
 	if guid, err := s.settingService.GetPanelGuid(); err == nil {
 		status.PanelGuid = guid
@@ -902,185 +842,10 @@ func (s *ServerService) sampleCPUUtilization() (float64, error) {
 }
 
 const (
-	maxXrayArchiveBytes = 200 << 20
-	maxXrayBinaryBytes  = 200 << 20
 	// maxXrayDigestBytes caps the .dgst checksum sidecar read; it is a few
 	// hundred bytes in practice.
 	maxXrayDigestBytes = 64 << 10
 )
-
-func (s *ServerService) GetXrayVersions() ([]string, error) {
-	const (
-		XrayURL    = "https://api.github.com/repos/XTLS/Xray-core/releases"
-		bufferSize = 8192
-	)
-
-	req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, XrayURL, nil)
-	if reqErr != nil {
-		return nil, reqErr
-	}
-	resp, err := s.settingService.NewProxiedHTTPClient(10 * time.Second).Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	// Check HTTP status code - GitHub API returns object instead of array on error
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		var errorResponse struct {
-			Message string `json:"message"`
-		}
-		if json.Unmarshal(bodyBytes, &errorResponse) == nil && errorResponse.Message != "" {
-			return nil, fmt.Errorf("GitHub API error: %s", errorResponse.Message)
-		}
-		return nil, fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, resp.Status)
-	}
-
-	buffer := bytes.NewBuffer(make([]byte, bufferSize))
-	buffer.Reset()
-	if _, err := buffer.ReadFrom(resp.Body); err != nil {
-		return nil, err
-	}
-
-	var releases []Release
-	if err := json.Unmarshal(buffer.Bytes(), &releases); err != nil {
-		return nil, err
-	}
-
-	var versions []string
-	for _, release := range releases {
-		tagVersion := strings.TrimPrefix(release.TagName, "v")
-		tagParts := strings.Split(tagVersion, ".")
-		if len(tagParts) != 3 {
-			continue
-		}
-
-		major, err1 := strconv.Atoi(tagParts[0])
-		minor, err2 := strconv.Atoi(tagParts[1])
-		patch, err3 := strconv.Atoi(tagParts[2])
-		if err1 != nil || err2 != nil || err3 != nil {
-			continue
-		}
-
-		if major > 26 || (major == 26 && minor > 6) || (major == 26 && minor == 6 && patch >= 27) {
-			versions = append(versions, release.TagName)
-		}
-	}
-	return versions, nil
-}
-
-func (s *ServerService) StopXrayService() error {
-	err := s.xrayService.StopXray()
-	if err != nil {
-		logger.Error("stop xray failed:", err)
-		return err
-	}
-	return nil
-}
-
-func (s *ServerService) RestartXrayService() error {
-	err := s.xrayService.RestartXray(true)
-	if err != nil {
-		logger.Error("start xray failed:", err)
-		return err
-	}
-	return nil
-}
-
-func (s *ServerService) downloadXRay(version string) (string, error) {
-	osName := runtime.GOOS
-	arch := runtime.GOARCH
-
-	switch osName {
-	case "darwin":
-		osName = "macos"
-	case "windows":
-		osName = "windows"
-	}
-
-	switch arch {
-	case "amd64":
-		arch = "64"
-	case "arm64":
-		arch = "arm64-v8a"
-	case "armv7":
-		arch = "arm32-v7a"
-	case "armv6":
-		arch = "arm32-v6"
-	case "armv5":
-		arch = "arm32-v5"
-	case "386":
-		arch = "32"
-	case "s390x":
-		arch = "s390x"
-	}
-
-	fileName := fmt.Sprintf("Xray-%s-%s.zip", osName, arch)
-	url := fmt.Sprintf("https://github.com/XTLS/Xray-core/releases/download/%s/%s", version, fileName)
-	client := s.settingService.NewProxiedHTTPClient(60 * time.Second)
-	req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
-	if reqErr != nil {
-		return "", reqErr
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("download xray: unexpected HTTP %d", resp.StatusCode)
-	}
-	if resp.ContentLength > maxXrayArchiveBytes {
-		return "", fmt.Errorf("download xray: archive exceeds %d bytes", maxXrayArchiveBytes)
-	}
-
-	file, err := os.CreateTemp("", "xray-*.zip")
-	if err != nil {
-		return "", err
-	}
-	path := file.Name()
-	ok := false
-	defer func() {
-		_ = file.Close()
-		if !ok {
-			_ = os.Remove(path)
-		}
-	}()
-
-	n, err := io.Copy(file, io.LimitReader(resp.Body, maxXrayArchiveBytes+1))
-	if err != nil {
-		return "", err
-	}
-	if n > maxXrayArchiveBytes {
-		return "", fmt.Errorf("download xray: archive exceeds %d bytes", maxXrayArchiveBytes)
-	}
-
-	// Verify the archive against the SHA2-256 published in the release's .dgst
-	// sidecar before installing it. TLS protects the transport, not the artifact;
-	// a corrupted or tampered asset must not be installed and run as xray.
-	want, err := s.fetchXrayDigestSHA256(client, url+".dgst")
-	if err != nil {
-		return "", err
-	}
-	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		return "", err
-	}
-	hasher := sha256.New()
-	if _, err := io.Copy(hasher, file); err != nil {
-		return "", err
-	}
-	if got := hex.EncodeToString(hasher.Sum(nil)); !strings.EqualFold(got, want) {
-		// User-facing warning: the archive's SHA-256 does not match the official
-		// release checksum, so the download is corrupted or has been tampered
-		// with. Abort the install so a bad binary is never run, and tell the user
-		// to retry/re-download rather than proceed with a mismatched image.
-		return "", fmt.Errorf("Xray update aborted: the downloaded archive does not match the official SHA-256 checksum, so the image is corrupted or differs from the official release. Please exit and re-download the official image, then try again (expected %s, got %s)", want, got)
-	}
-
-	ok = true
-	return path, nil
-}
 
 // fetchXrayDigestSHA256 downloads the .dgst sidecar XTLS publishes next to each
 // release asset and returns the SHA2-256 hex digest it lists.
@@ -1119,162 +884,6 @@ func parseXrayDigestSHA256(dgst []byte) (string, error) {
 		return h, nil
 	}
 	return "", fmt.Errorf("xray checksum: no SHA2-256 entry in digest")
-}
-
-func (s *ServerService) UpdateXray(version string) error {
-	versions, err := s.GetXrayVersions()
-	if err != nil {
-		return err
-	}
-	if !slices.Contains(versions, version) {
-		return fmt.Errorf("xray version %q is not in the fetched release list", version)
-	}
-
-	// 1. Stop xray before doing anything
-	if err := s.StopXrayService(); err != nil {
-		logger.Warning("failed to stop xray before update:", err)
-	}
-
-	// 2. Download the zip
-	zipFileName, err := s.downloadXRay(version)
-	if err != nil {
-		return err
-	}
-	defer os.Remove(zipFileName)
-
-	zipFile, err := os.Open(zipFileName)
-	if err != nil {
-		return err
-	}
-	defer zipFile.Close()
-
-	stat, err := zipFile.Stat()
-	if err != nil {
-		return err
-	}
-	reader, err := zip.NewReader(zipFile, stat.Size())
-	if err != nil {
-		return err
-	}
-
-	// 3. Helper to extract files
-	copyZipFile := func(zipName string, fileName string) error {
-		zipFile, err := reader.Open(zipName)
-		if err != nil {
-			return err
-		}
-		defer zipFile.Close()
-		if err := os.MkdirAll(filepath.Dir(fileName), 0o755); err != nil {
-			return err
-		}
-		tmpFile, err := os.CreateTemp(filepath.Dir(fileName), ".xray-*")
-		if err != nil {
-			return err
-		}
-		tmpPath := tmpFile.Name()
-		ok := false
-		defer func() {
-			_ = tmpFile.Close()
-			if !ok {
-				_ = os.Remove(tmpPath)
-			}
-		}()
-		n, err := io.Copy(tmpFile, io.LimitReader(zipFile, maxXrayBinaryBytes+1))
-		if err != nil {
-			return err
-		}
-		if n > maxXrayBinaryBytes {
-			return fmt.Errorf("xray binary exceeds %d bytes", maxXrayBinaryBytes)
-		}
-		if err := tmpFile.Chmod(0o755); err != nil {
-			return err
-		}
-		if err := tmpFile.Close(); err != nil {
-			return err
-		}
-		if runtime.GOOS == "windows" {
-			_ = os.Remove(fileName)
-		}
-		if err := os.Rename(tmpPath, fileName); err != nil {
-			return err
-		}
-		ok = true
-		return nil
-	}
-
-	// 4. Extract correct binary
-	if runtime.GOOS == "windows" {
-		targetBinary := filepath.Join(config.GetBinFolderPath(), "xray-windows-amd64.exe")
-		err = copyZipFile("xray.exe", targetBinary)
-	} else {
-		err = copyZipFile("xray", xray.GetBinaryPath())
-	}
-	if err != nil {
-		return err
-	}
-
-	// 5. Restart xray
-	if err := s.xrayService.RestartXray(true); err != nil {
-		logger.Error("start xray failed:", err)
-		return err
-	}
-
-	return nil
-}
-
-// syslogTimeout keeps a stalled journalctl from hanging the Syslog request (#6629).
-var syslogTimeout = 15 * time.Second
-
-func (s *ServerService) GetLogs(count string, level string, syslog string) []string {
-	c, _ := strconv.Atoi(count)
-	var lines []string
-
-	if syslog == "true" {
-		// Check if running on Windows - journalctl is not available
-		if runtime.GOOS == "windows" {
-			return []string{"Syslog is not supported on Windows. Please use application logs instead by unchecking the 'Syslog' option."}
-		}
-
-		// Validate and sanitize count parameter
-		countInt, err := strconv.Atoi(count)
-		if err != nil || countInt < 1 || countInt > 10000 {
-			return []string{"Invalid count parameter - must be a number between 1 and 10000"}
-		}
-
-		// Validate level parameter - only allow valid syslog levels
-		validLevels := map[string]bool{
-			"0": true, "emerg": true,
-			"1": true, "alert": true,
-			"2": true, "crit": true,
-			"3": true, "err": true,
-			"4": true, "warning": true,
-			"5": true, "notice": true,
-			"6": true, "info": true,
-			"7": true, "debug": true,
-		}
-		if !validLevels[level] {
-			return []string{"Invalid level parameter - must be a valid syslog level"}
-		}
-
-		// Use hardcoded command with validated parameters
-		ctx, cancel := context.WithTimeout(context.Background(), syslogTimeout)
-		defer cancel()
-		cmd := exec.CommandContext(ctx, "journalctl", "-u", "x-ui", "--no-pager", "-n", strconv.Itoa(countInt), "-p", level)
-		var out bytes.Buffer
-		cmd.Stdout = &out
-		err = cmd.Run()
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return []string{"journalctl did not answer in time. Try a smaller line count or a less strict level."}
-		}
-		if err != nil {
-			return []string{"Failed to run journalctl command! Make sure systemd is available and x-ui service is registered."}
-		}
-		lines = strings.Split(out.String(), "\n")
-	} else {
-		lines = logger.GetLogs(c, level)
-	}
-
-	return lines
 }
 
 // parseAccessLogFields extracts the structured fields from one Xray access-log
@@ -1338,83 +947,6 @@ type AmneziaWGLogs struct {
 	Running bool           `json:"running" example:"true"`
 }
 
-func (s *ServerService) GetXrayLogs(
-	count string,
-	filter string,
-	showDirect string,
-	showBlocked string,
-	showProxy string,
-	freedoms []string,
-	blackholes []string,
-) []LogEntry {
-	const (
-		Direct = iota
-		Blocked
-		Proxied
-	)
-
-	countInt, _ := strconv.Atoi(count)
-	var entries []LogEntry
-
-	pathToAccessLog, err := xray.GetAccessLogPath()
-	if err != nil {
-		return nil
-	}
-
-	file, err := os.Open(pathToAccessLog)
-	if err != nil {
-		return nil
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-
-		if line == "" || strings.Contains(line, "api -> api") {
-			// skipping empty lines and api calls
-			continue
-		}
-
-		if filter != "" && !strings.Contains(line, filter) {
-			// applying filter if it's not empty
-			continue
-		}
-
-		entry := parseAccessLogFields(line)
-
-		if logEntryContains(line, freedoms) {
-			if showDirect == "false" {
-				continue
-			}
-			entry.Event = Direct
-		} else if logEntryContains(line, blackholes) {
-			if showBlocked == "false" {
-				continue
-			}
-			entry.Event = Blocked
-		} else {
-			if showProxy == "false" {
-				continue
-			}
-			entry.Event = Proxied
-		}
-
-		entries = append(entries, entry)
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil
-	}
-
-	if len(entries) > countInt {
-		entries = entries[len(entries)-countInt:]
-	}
-
-	return entries
-}
-
 // isVirtualInterface returns true for loopback and virtual/tunnel interfaces
 // that should be excluded from network traffic statistics.
 func isVirtualInterface(name string) bool {
@@ -1441,34 +973,6 @@ func isVirtualInterface(name string) bool {
 		}
 	}
 	return false
-}
-
-func logEntryContains(line string, suffixes []string) bool {
-	for _, sfx := range suffixes {
-		if strings.Contains(line, sfx+"]") {
-			return true
-		}
-	}
-	return false
-}
-
-func (s *ServerService) GetConfigJson() (any, error) {
-	config, err := s.xrayService.GetXrayConfig()
-	if err != nil {
-		return nil, err
-	}
-	contents, err := json.MarshalIndent(config, "", "  ")
-	if err != nil {
-		return nil, err
-	}
-
-	var jsonData any
-	err = json.Unmarshal(contents, &jsonData)
-	if err != nil {
-		return nil, err
-	}
-
-	return jsonData, nil
 }
 
 func (s *ServerService) GetDb() ([]byte, error) {
@@ -2213,134 +1717,6 @@ func (entry geofileEntry) latestURL() string {
 	return entry.Repo + "/releases/latest/download/" + entry.Asset
 }
 
-func (entry geofileEntry) taggedURL(tag string) string {
-	return entry.Repo + "/releases/download/" + tag + "/" + entry.Asset
-}
-
-// stagedGeofile is a verified download waiting to be moved into the asset folder.
-type stagedGeofile struct {
-	destPath  string
-	stagePath string
-}
-
-// restartXrayAfterGeofileUpdate is a seam: tests assert that an update which
-// installed nothing also restarted nothing.
-var restartXrayAfterGeofileUpdate = (*ServerService).RestartXrayService
-
-func (s *ServerService) UpdateGeofile(fileName string) error {
-	// Strict allowlist check to avoid writing uncontrolled files
-	if fileName != "" {
-		if _, ok := geofileAllowlist[fileName]; !ok {
-			return common.NewErrorf("Invalid geofile name: %q not in allowlist", fileName)
-		}
-	}
-
-	wanted := geofileAllowlist
-	if fileName != "" {
-		wanted = map[string]geofileEntry{fileName: geofileAllowlist[fileName]}
-	}
-
-	// Atomic per upstream, not across all six: one release's databases belong
-	// together, but a failing repo must not discard another repo's good files.
-	byRepo := make(map[string][]geofileEntry, len(wanted))
-	for _, entry := range wanted {
-		byRepo[entry.Repo] = append(byRepo[entry.Repo], entry)
-	}
-	repos := slices.Sorted(maps.Keys(byRepo))
-
-	binFolder := config.GetBinFolderPath()
-	stageDir, err := os.MkdirTemp(binFolder, "geofile-")
-	if err != nil {
-		return common.NewErrorf("Failed to create staging folder for Geofiles: %v", err)
-	}
-	defer os.RemoveAll(stageDir)
-
-	client := s.settingService.NewProxiedHTTPClient(0)
-
-	var errorMessages []string
-	installed := 0
-	for _, repo := range repos {
-		entries := byRepo[repo]
-		slices.SortFunc(entries, func(a, b geofileEntry) int { return strings.Compare(a.FileName, b.FileName) })
-
-		staged, err := s.stageGeofileRelease(client, entries, binFolder, stageDir)
-		if err != nil {
-			errorMessages = append(errorMessages, err.Error())
-			continue
-		}
-		for _, file := range staged {
-			if err := os.Rename(file.stagePath, file.destPath); err != nil {
-				errorMessages = append(errorMessages, fmt.Sprintf("Failed to install Geofile %s: %v", file.destPath, err))
-				continue
-			}
-			installed++
-		}
-	}
-
-	// Nothing changed, so there is no reason to restart the core and drop every
-	// client connection.
-	if installed > 0 {
-		if err := restartXrayAfterGeofileUpdate(s); err != nil {
-			errorMessages = append(errorMessages, fmt.Sprintf("Updated Geofiles but Failed to start Xray: %v", err))
-		}
-	}
-
-	if len(errorMessages) > 0 {
-		return common.NewErrorf("%s", strings.Join(errorMessages, "\r\n"))
-	}
-
-	return nil
-}
-
-// stageGeofileRelease downloads one upstream's databases and verifies each
-// against a digest from the same release, staging all of them or none.
-func (s *ServerService) stageGeofileRelease(client *http.Client, entries []geofileEntry, binFolder, stageDir string) ([]stagedGeofile, error) {
-	// Resolve "latest" once. These upstreams publish several times a day, and a
-	// release landing mid-batch would check one release's digest against another's bytes.
-	tag, err := resolveGeofileTag(client, entries[0].latestURL())
-	if err != nil {
-		return nil, common.NewErrorf("Error resolving Geofile release from %s: %v", entries[0].Repo, err)
-	}
-
-	var staged []stagedGeofile
-	for _, entry := range entries {
-		destPath := filepath.Join(binFolder, entry.FileName)
-		stagePath := filepath.Join(stageDir, entry.FileName)
-		changed, err := s.stageGeofile(client, entry, tag, destPath, stagePath)
-		if err != nil {
-			return nil, common.NewErrorf("Error downloading Geofile '%s': %v", entry.FileName, err)
-		}
-		if changed {
-			staged = append(staged, stagedGeofile{destPath: destPath, stagePath: stagePath})
-		}
-	}
-	return staged, nil
-}
-
-// resolveGeofileTag reads the immutable release tag a `latest` download
-// redirects to, so the asset and its digest cannot come from two releases.
-func resolveGeofileTag(client *http.Client, latestURL string) (string, error) {
-	pinned := *client
-	pinned.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, latestURL, nil)
-	if err != nil {
-		return "", err
-	}
-	resp, err := pinned.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body)
-
-	location := resp.Header.Get("Location")
-	if location == "" {
-		return "", common.NewErrorf("expected a redirect to a tagged release, got HTTP %d", resp.StatusCode)
-	}
-	return geofileTagFromLocation(location)
-}
-
 // geofileTagFromLocation pulls <tag> out of a .../releases/download/<tag>/<asset>
 // redirect target.
 func geofileTagFromLocation(location string) (string, error) {
@@ -2354,106 +1730,6 @@ func geofileTagFromLocation(location string) (string, error) {
 		return "", common.NewErrorf("unexpected release redirect %q", location)
 	}
 	return tag, nil
-}
-
-// stageGeofile downloads one database into stagePath and checks it against the
-// SHA-256 its upstream publishes. It reports false on 304, staging nothing.
-func (s *ServerService) stageGeofile(client *http.Client, entry geofileEntry, tag, destPath, stagePath string) (bool, error) {
-	assetURL := entry.taggedURL(tag)
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, assetURL, nil)
-	if err != nil {
-		return false, common.NewErrorf("Failed to create HTTP request for %s: %v", assetURL, err)
-	}
-
-	if fileInfo, err := os.Stat(destPath); err == nil {
-		if localFileModTime := fileInfo.ModTime(); !localFileModTime.IsZero() {
-			req.Header.Set("If-Modified-Since", localFileModTime.UTC().Format(http.TimeFormat))
-		}
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return false, common.NewErrorf("Failed to download Geofile from %s: %v", assetURL, err)
-	}
-	defer resp.Body.Close()
-
-	// Parse Last-Modified header from server
-	var serverModTime time.Time
-	if serverModTimeStr := resp.Header.Get("Last-Modified"); serverModTimeStr != "" {
-		parsedTime, err := time.Parse(http.TimeFormat, serverModTimeStr)
-		if err != nil {
-			logger.Warningf("Failed to parse Last-Modified header for %s: %v", assetURL, err)
-		} else {
-			serverModTime = parsedTime
-		}
-	}
-
-	// The conditional GET above reads this back, so it must survive the rename.
-	setModTime := func(target string) {
-		if !serverModTime.IsZero() {
-			if err := os.Chtimes(target, serverModTime, serverModTime); err != nil {
-				logger.Warningf("Failed to update modification time for %s: %v", target, err)
-			}
-		}
-	}
-
-	// Handle 304 Not Modified
-	if resp.StatusCode == http.StatusNotModified {
-		setModTime(destPath)
-		return false, nil
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return false, common.NewErrorf("Failed to download Geofile from %s: received status code %d", assetURL, resp.StatusCode)
-	}
-
-	file, err := os.Create(stagePath)
-	if err != nil {
-		return false, common.NewErrorf("Failed to create Geofile %s: %v", stagePath, err)
-	}
-	hasher := sha256.New()
-	if _, err := io.Copy(io.MultiWriter(file, hasher), resp.Body); err != nil {
-		file.Close()
-		return false, common.NewErrorf("Failed to save Geofile %s: %v", stagePath, err)
-	}
-	if err := file.Close(); err != nil {
-		return false, common.NewErrorf("Failed to save Geofile %s: %v", stagePath, err)
-	}
-
-	// TLS protects the transport, not the artifact. Xray parses these databases
-	// when it builds its routing matchers, so a bad one takes the core down.
-	want, err := s.fetchGeofileDigest(client, assetURL+".sha256sum", entry.Asset)
-	if err != nil {
-		return false, err
-	}
-	if got := hex.EncodeToString(hasher.Sum(nil)); !strings.EqualFold(got, want) {
-		return false, common.NewErrorf("does not match the published SHA-256 checksum, so the download is corrupted or has been tampered with (expected %s, got %s)", want, got)
-	}
-
-	setModTime(stagePath)
-	return true, nil
-}
-
-// fetchGeofileDigest downloads the .sha256sum sidecar published beside a geo
-// database and returns the digest it lists for assetName.
-func (s *ServerService) fetchGeofileDigest(client *http.Client, sumsURL, assetName string) (string, error) {
-	req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, sumsURL, nil)
-	if reqErr != nil {
-		return "", fmt.Errorf("download geofile checksum: %w", reqErr)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("download geofile checksum: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("download geofile checksum: unexpected HTTP %d", resp.StatusCode)
-	}
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxXrayDigestBytes))
-	if err != nil {
-		return "", fmt.Errorf("download geofile checksum: %w", err)
-	}
-	return parseGeofileDigest(raw, assetName)
 }
 
 // parseGeofileDigest returns the SHA-256 hex a sidecar lists for assetName,

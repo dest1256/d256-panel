@@ -341,7 +341,6 @@
         "stream": "Stream",
         "streamHelp": "Xray stream block wrapper:"
       },
-      "advancedTitle": "Advanced Settings",
       "subSortIndex": "Sub order",
       "inboundInfo": "Inbound Information",
       "exportInbound": "Export Inbound",
@@ -901,7 +900,6 @@
       "amneziaWgKeepAliveInvalid": "Enter a whole number or range from 0 to 65535.",
       "tunnelKeepAliveHint": "How often the client sends a keepalive packet. 25 is the usual value: it holds the NAT mapping open and brings an idle peer back on its own after any drop, including a panel restart. 0 disables it — an idle client then stays disconnected until it sends traffic.",
       "amneziaWgConfig": "AmneziaWG config",
-      "tuicConfig": "TUIC config (Clash)",
       "mtprotoSecret": "MTProto secret",
       "mtprotoSecretHint": "The client's FakeTLS secret. Regenerate to rotate it.",
       "mtprotoAdTag": "Ad-tag (sponsored channel)",
@@ -2179,23 +2177,7 @@
         "outboundObfuscationHint": "Must exactly match the server side parameters.",
         "kernelBlocker": {}
       },
-      "tuic": {
-        "congestionControl": "Congestion Control",
-        "congestionControlHint": "Server and client algorithm. Server changes apply after reconnecting.",
-        "profileOptions": "Client profile options",
-        "alpn": "ALPN",
-        "udpRelayMode": "UDP Relay Mode",
-        "udpRelayModeHint": "Client UDP mode. The server supports both.",
-        "zeroRttHandshake": "Zero-RTT Handshake",
-        "logLevel": "Log Level",
-        "logLevelHint": "Minimum log level for this inbound.",
-        "maxIdleTime": "Max Idle Time (s)",
-        "authTimeout": "Auth Timeout (s)",
-        "maxUdpRelayPacketSize": "Max UDP Packet Size",
-        "sni": "SNI",
-        "sniHint": "TLS server name in the client profile.",
-        "sniRequired": "Enter a domain to auto-fill certificate paths."
-      },
+      "tuic": {},
       "tun": {
         "userLevel": "User Level"
       },

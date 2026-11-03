@@ -135,13 +135,7 @@ func (a *XraySettingController) updateSetting(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
 		return
 	}
-	// Only reconcile a running core; a manually stopped xray stays stopped.
-	if a.XrayService.IsXrayRunning() {
-		if err := a.XrayService.RestartXray(false); err != nil {
-			jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
-			return
-		}
-	}
+	// Nodes pick the new template up through the desired-state push.
 	jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), nil)
 }
 

@@ -562,52 +562,8 @@ func (s *SettingService) SetPanelOutbound(tag string) error {
 	return s.setString("panelOutbound", tag)
 }
 
-// PanelEgressProxyURL resolves the loopback SOCKS bridge that the generated
-// config exposes when a panel outbound is configured (see injectPanelEgress).
-// It returns "" — meaning a direct connection — when the feature is off or
-// the bridge is not present in the running core yet.
-func (s *SettingService) PanelEgressProxyURL() string {
-	tag, err := s.GetPanelOutbound()
-	if err != nil || tag == "" {
-		return ""
-	}
-	proc := XrayProcess()
-	if proc == nil || !proc.IsRunning() {
-		logger.Warning("panel outbound [", tag, "] is set but Xray is not running, using a direct connection")
-		return ""
-	}
-	cfg := proc.GetConfig()
-	if cfg == nil {
-		return ""
-	}
-	for i := range cfg.InboundConfigs {
-		if cfg.InboundConfigs[i].Tag == PanelEgressInboundTag {
-			return fmt.Sprintf("socks5://127.0.0.1:%d", cfg.InboundConfigs[i].Port)
-		}
-	}
-	logger.Warning("panel outbound [", tag, "] is set but the egress bridge is not in the running config, using a direct connection")
-	return ""
-}
-
-func (s *SettingService) NodeEgressProxyURL(nodeID int) string {
-	tag := NodeEgressInboundTag(nodeID)
-	proc := XrayProcess()
-	if proc == nil || !proc.IsRunning() {
-		logger.Warning("node outbound [", tag, "] is set but Xray is not running, using a direct connection")
-		return ""
-	}
-	cfg := proc.GetConfig()
-	if cfg == nil {
-		return ""
-	}
-	for i := range cfg.InboundConfigs {
-		if cfg.InboundConfigs[i].Tag == tag {
-			return fmt.Sprintf("socks5://127.0.0.1:%d", cfg.InboundConfigs[i].Port)
-		}
-	}
-	logger.Warning("node outbound [", tag, "] is set but the egress bridge is not in the running config, using a direct connection")
-	return ""
-}
+// PanelEgressProxyURL is empty: the panel no longer hosts an Xray core to route its own requests through.
+func (s *SettingService) PanelEgressProxyURL() string { return "" }
 
 // NewProxiedHTTPClient returns an HTTP client that routes the panel's own
 // outbound requests through the configured panel outbound (via the loopback

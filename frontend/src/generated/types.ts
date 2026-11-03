@@ -4,7 +4,6 @@ export type OnlineAPISupport = number;
 export type ProcessState = string;
 export type Protocol = string;
 export type addrFamily = number;
-export type staticEgressResolver = string;
 export type trafficLocalApplyAction = number;
 export type transportBits = number;
 
@@ -772,7 +771,6 @@ export interface InboundOption {
   ssMethod: string;
   tag: string;
   tlsFlowCapable: boolean;
-  tuicServer?: TuicServerSettings | null;
   wgDns?: string;
   wgMtu?: number;
   wgPublicKey?: string;
@@ -999,26 +997,6 @@ export interface Traffic {
   IsOutbound: boolean;
   Tag: string;
   Up: number;
-}
-
-export interface TuicClientSettings {
-  email: string;
-  password: string;
-  uuid: string;
-}
-
-export interface TuicServerSettings {
-  alpn: string[];
-  authentication_timeout: number;
-  certificate: string;
-  congestion_control: string;
-  log_level: string;
-  max_idle_time: number;
-  max_udp_relay_packet_size: number;
-  private_key: string;
-  sni?: string;
-  udp_relay_mode: string;
-  zero_rtt_handshake: boolean;
 }
 
 export interface User {

@@ -2,7 +2,6 @@ package controller
 
 import (
 	"encoding/json"
-	"errors"
 	"net"
 	"strconv"
 	"strings"
@@ -164,11 +163,6 @@ func (a *InboundController) getInbound(c *gin.Context) {
 func (a *InboundController) addInbound(c *gin.Context) {
 	inbound, ok := middleware.BindAndValidate[model.Inbound](c)
 	if !ok {
-		return
-	}
-	if inbound.Protocol == model.TUIC {
-		// The TUIC engine used to run inside the panel; moving it onto the nodes is not finished yet.
-		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), errors.New("TUIC inbounds are not available yet: the TUIC engine is being moved onto the nodes"))
 		return
 	}
 	user := session.GetLoginUser(c)

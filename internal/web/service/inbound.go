@@ -19,7 +19,6 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/tuic"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/maskcompat"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/netsafe"
@@ -328,21 +327,20 @@ func (s *InboundService) annotateFallbackParents(db *gorm.DB, inbounds []*model.
 }
 
 type InboundOption struct {
-	Id             int                      `json:"id" example:"1"`
-	Remark         string                   `json:"remark" example:"VLESS-443"`
-	Tag            string                   `json:"tag" example:"in-443-tcp"`
-	Protocol       string                   `json:"protocol" example:"vless"`
-	Port           int                      `json:"port" example:"443"`
-	Enable         bool                     `json:"enable" example:"true"`
-	Network        string                   `json:"network,omitempty"`
-	Security       string                   `json:"security,omitempty"`
-	TlsFlowCapable bool                     `json:"tlsFlowCapable" example:"true"`
-	SsMethod       string                   `json:"ssMethod"`
-	WgPublicKey    string                   `json:"wgPublicKey,omitempty"`
-	WgMtu          int                      `json:"wgMtu,omitempty"`
-	WgDns          string                   `json:"wgDns,omitempty"`
-	MtprotoDomain  string                   `json:"mtprotoDomain,omitempty"`
-	TuicServer     *tuic.TuicServerSettings `json:"tuicServer,omitempty"`
+	Id             int    `json:"id" example:"1"`
+	Remark         string `json:"remark" example:"VLESS-443"`
+	Tag            string `json:"tag" example:"in-443-tcp"`
+	Protocol       string `json:"protocol" example:"vless"`
+	Port           int    `json:"port" example:"443"`
+	Enable         bool   `json:"enable" example:"true"`
+	Network        string `json:"network,omitempty"`
+	Security       string `json:"security,omitempty"`
+	TlsFlowCapable bool   `json:"tlsFlowCapable" example:"true"`
+	SsMethod       string `json:"ssMethod"`
+	WgPublicKey    string `json:"wgPublicKey,omitempty"`
+	WgMtu          int    `json:"wgMtu,omitempty"`
+	WgDns          string `json:"wgDns,omitempty"`
+	MtprotoDomain  string `json:"mtprotoDomain,omitempty"`
 	// Hosting node; nil for this panel's own inbounds. Lets the clients
 	// page map a node filter onto inbound IDs (#4997).
 	NodeId *int `json:"nodeId,omitempty"`
@@ -408,7 +406,6 @@ func (s *InboundService) GetInboundOptions(userId int) ([]InboundOption, error) 
 			WgMtu:             wgMtu,
 			WgDns:             wgDns,
 			MtprotoDomain:     inboundMtprotoDomain(r.Protocol, r.Settings),
-			TuicServer:        inboundTuicServer(r.Protocol, r.Settings),
 			NodeId:            r.NodeId,
 			NodeAddress:       r.NodeAddress,
 			Listen:            r.Listen,
@@ -481,28 +478,6 @@ func inboundWireguardHints(protocol string, settings string) (string, int, strin
 		}
 	}
 	return publicKey, parsed.MTU, parsed.DNS
-}
-
-func inboundTuicServer(protocol string, settings string) *tuic.TuicServerSettings {
-	if protocol != string(model.TUIC) || strings.TrimSpace(settings) == "" {
-		return nil
-	}
-	inst, ok := tuic.InstanceFromInbound(&model.Inbound{Protocol: model.TUIC, Settings: settings})
-	if !ok {
-		return nil
-	}
-	return &tuic.TuicServerSettings{
-		Certificate:           inst.Certificate,
-		CongestionControl:     inst.CongestionControl,
-		ALPN:                  inst.ALPN,
-		UDPRelayMode:          inst.UDPRelayMode,
-		ZeroRTTHandshake:      inst.ZeroRTTHandshake,
-		LogLevel:              inst.LogLevel,
-		MaxIdleTime:           inst.MaxIdleTime,
-		AuthenticationTimeout: inst.AuthenticationTimeout,
-		MaxUdpRelayPacketSize: inst.MaxUdpRelayPacketSize,
-		SNI:                   inst.SNI,
-	}
 }
 
 // inboundMtprotoDomain returns the inbound-level FakeTLS default domain, used by
@@ -1352,25 +1327,6 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 			// so the ports it now derives were never in the guard's context.
 			if aErr := s.checkAmneziaWGForwardedPorts(tx, inbound.Settings); aErr != nil {
 				return aErr
-			}
-		}
-		if inbound.NodeID == nil && inbound.Protocol == model.TUIC {
-			if self := tuicSocksSelfConflict(inbound, inbound.Id); self != "" {
-				return common.NewError(self)
-			}
-			conflict, cErr := checkTuicSocksRelayCollision(tx, inbound.Id)
-			if cErr != nil {
-				return cErr
-			}
-			if conflict != nil {
-				return common.NewError(conflict.String())
-			}
-			conflict, cErr = checkTuicSocksReverseConflict(tx, inbound.Id)
-			if cErr != nil {
-				return cErr
-			}
-			if conflict != nil {
-				return common.NewError(conflict.String())
 			}
 		}
 		// Emails seeded here (import's ClientStats, e.g. the controller's forced

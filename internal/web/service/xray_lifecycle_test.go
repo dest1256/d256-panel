@@ -1,7 +1,6 @@
 package service
 
 import (
-	"sync"
 	"testing"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/xray"
@@ -28,41 +27,4 @@ func TestXrayLifecycleSnapshotDoesNotOverwriteNewerResult(t *testing.T) {
 	if result != "" {
 		t.Fatalf("snapshot result = %q, want empty", result)
 	}
-}
-
-func TestXrayLifecycleConcurrentStatusResultAndTrafficReads(t *testing.T) {
-	previousProcess, previousResult := xrayState.snapshot()
-	t.Cleanup(func() {
-		xrayState.mu.Lock()
-		xrayState.process = previousProcess
-		xrayState.result = previousResult
-		xrayState.mu.Unlock()
-	})
-
-	first := xray.NewProcess(&xray.Config{})
-	second := xray.NewProcess(&xray.Config{})
-	service := XrayService{}
-	var wg sync.WaitGroup
-
-	wg.Go(func() {
-		for range 200 {
-			xrayState.replace(first)
-			xrayState.replace(second)
-		}
-	})
-
-	for range 4 {
-		wg.Go(func() {
-			for range 200 {
-				_ = service.IsXrayRunning()
-				_ = service.GetXrayResult()
-				_, _, err := service.GetXrayTraffic()
-				if err == nil || err.Error() != "xray is not running" {
-					t.Errorf("GetXrayTraffic error = %v, want xray is not running", err)
-				}
-			}
-		})
-	}
-
-	wg.Wait()
 }

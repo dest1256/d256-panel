@@ -61,3 +61,21 @@ func amneziawgForwardedPortOwner(*gorm.DB, *model.Inbound, int) (*portConflictDe
 func injectMtprotoEgress(any, *model.Inbound) {}
 
 func (s *InboundService) normalizeMtprotoXrayPort(*model.Inbound, string) error { return nil }
+
+// TUIC was dropped from the product; these shims keep the inbound/client services compiling
+// until the protocol branches are removed from them.
+
+func normalizeTuicSettings(*model.Inbound) error { return nil }
+
+func validateTuicClientEmails(model.Protocol, []model.Client) error { return nil }
+
+func (s *InboundService) applyLocalTuic(int) {}
+
+func checkTuicSocksConflict(*gorm.DB, *model.Inbound, int, transportBits) (*portConflictDetail, error) {
+	return nil, nil
+}
+
+// The panel hosts no Xray core any more, so stopping and restarting it around database restores is a no-op.
+func (s *ServerService) StopXrayService() error { return nil }
+
+func (s *ServerService) RestartXrayService() error { return nil }

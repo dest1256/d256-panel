@@ -341,7 +341,6 @@
         "stream": "Stream",
         "streamHelp": "Обёртка блока stream Xray:"
       },
-      "advancedTitle": "Дополнительные настройки",
       "subSortIndex": "Порядок",
       "inboundInfo": "Информация о подключении",
       "exportInbound": "Экспорт подключений",
@@ -901,7 +900,6 @@
       "amneziaWgKeepAliveInvalid": "Введите целое число или диапазон от 0 до 65535.",
       "tunnelKeepAliveHint": "Как часто клиент шлёт keepalive-пакет. Обычное значение 25: оно держит NAT-маппинг открытым и возвращает простаивающий пир сам после любого разрыва, включая рестарт панели. 0 отключает — тогда молчащий клиент остаётся отключённым до первого своего пакета.",
       "amneziaWgConfig": "Конфиг AmneziaWG",
-      "tuicConfig": "Конфиг TUIC (Clash)",
       "mtprotoSecret": "Секрет MTProto",
       "mtprotoSecretHint": "Секрет FakeTLS клиента. Перегенерируйте, чтобы сменить.",
       "mtprotoAdTag": "Рекламный тег (спонсорский канал)",
@@ -2058,23 +2056,7 @@
         "outboundObfuscationHint": "Must exactly match the server side parameters.",
         "kernelBlocker": {}
       },
-      "tuic": {
-        "congestionControl": "Контроль перегрузок",
-        "congestionControlHint": "Алгоритм сервера и клиента. На сервере меняется после переподключения.",
-        "profileOptions": "Параметры клиентского профиля",
-        "alpn": "ALPN",
-        "udpRelayMode": "Режим ретрансляции UDP",
-        "udpRelayModeHint": "Режим UDP для клиента. Сервер поддерживает оба.",
-        "zeroRttHandshake": "0-RTT рукопожатие",
-        "logLevel": "Уровень логирования",
-        "logLevelHint": "Минимальный уровень сообщений в логах этого инбаунда.",
-        "maxIdleTime": "Макс. время простоя (сек)",
-        "authTimeout": "Таймаут аутентификации (сек)",
-        "maxUdpRelayPacketSize": "Макс. размер пакета UDP",
-        "sni": "SNI",
-        "sniHint": "Имя сервера для TLS в клиентском профиле.",
-        "sniRequired": "Укажите домен для автозаполнения."
-      },
+      "tuic": {},
       "tun": {
         "userLevel": "Уровень пользователя"
       },

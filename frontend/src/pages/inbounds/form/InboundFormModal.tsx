@@ -60,7 +60,6 @@ import {
   MasqueStreamFields,
   MixedFields,
   ShadowsocksFields,
-  TuicFields,
   TunFields,
   TunnelFields,
   VlessFields,
@@ -84,7 +83,11 @@ import SniffingTab from './SniffingTab';
 import type { DBInbound } from '@/models/dbinbound';
 import type { NodeRecord } from '@/api/queries/useNodesQuery';
 
-const PROTOCOL_OPTIONS = Object.values(Protocols).map((p) => ({ value: p, label: p }));
+// Protocols whose engine ran inside the old panel process are no longer offered for new inbounds.
+const RETIRED_PROTOCOLS: string[] = [Protocols.MTPROTO, Protocols.AMNEZIAWG, Protocols.TUIC];
+const PROTOCOL_OPTIONS = Object.values(Protocols)
+  .filter((p) => !RETIRED_PROTOCOLS.includes(p))
+  .map((p) => ({ value: p, label: p }));
 const SHARE_ADDR_STRATEGIES = ['node', 'listen', 'custom'] as const;
 const SHARE_ADDR_HOSTNAME_RE =
   /^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*$/;
@@ -780,8 +783,6 @@ export default function InboundFormModal({
       {protocol === Protocols.WIREGUARD && (
         <WireguardFields wgPubKey={wgPubKey} regenInboundWg={regenInboundWg} />
       )}
-
-      {protocol === Protocols.TUIC && <TuicFields />}
 
       {protocol === Protocols.MASQUE && <MasqueSettingsFields />}
 

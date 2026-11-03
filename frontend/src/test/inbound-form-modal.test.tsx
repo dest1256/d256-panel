@@ -46,7 +46,8 @@ function chooseVirtualizedProtocol(optionText: string) {
   const input = document.getElementById('protocol') as HTMLElement;
   const select = input.closest('.ant-select') as HTMLElement;
   const current = (select.textContent ?? '').trim();
-  const order = Object.values(Protocols) as string[];
+  const retired = ['mtproto', 'amneziawg', 'tuic'];
+  const order = (Object.values(Protocols) as string[]).filter((p) => !retired.includes(p));
   const steps = order.indexOf(optionText) - order.indexOf(current);
   if (order.indexOf(optionText) < 0 || order.indexOf(current) < 0 || steps < 0) {
     throw new Error(`cannot step from '${current}' to '${optionText}'`);
