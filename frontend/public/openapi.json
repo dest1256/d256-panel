@@ -3670,6 +3670,10 @@
             "example": true,
             "type": "boolean"
           },
+          "enrolledAt": {
+            "format": "int64",
+            "type": "integer"
+          },
           "guid": {
             "description": "Guid is the remote panel's stable self-identifier (its panelGuid),\nlearned from each heartbeat. It is the globally stable node identity used\nto attribute online clients/inbounds to the physical node across a chain\nof nodes (#4983); panel-local autoincrement ids don't survive a hop.\nObserved-state only — never user-edited.",
             "type": "string"
@@ -3726,6 +3730,9 @@
             "format": "int64",
             "type": "integer"
           },
+          "nodeVersion": {
+            "type": "string"
+          },
           "onlineCount": {
             "example": 3,
             "type": "integer"
@@ -3748,6 +3755,9 @@
             "example": 2053,
             "maximum": 65535,
             "minimum": 1,
+            "type": "integer"
+          },
+          "protoVersion": {
             "type": "integer"
           },
           "remark": {
@@ -3820,6 +3830,7 @@
           "depletedCount",
           "disabledCount",
           "enable",
+          "enrolledAt",
           "guid",
           "id",
           "inboundCount",
@@ -3832,16 +3843,170 @@
           "name",
           "netDown",
           "netUp",
+          "nodeVersion",
           "onlineCount",
           "outboundTag",
           "panelVersion",
           "pinnedCertSha256",
           "port",
+          "protoVersion",
           "remark",
           "scheme",
           "status",
           "tlsVerifyMode",
           "updatedAt",
+          "uptimeSecs",
+          "xrayError",
+          "xrayState",
+          "xrayVersion"
+        ],
+        "type": "object"
+      },
+      "NodeEnrollResponse": {
+        "properties": {
+          "nodeId": {
+            "example": 1,
+            "type": "integer"
+          },
+          "token": {
+            "example": "1.k3b1...",
+            "type": "string"
+          }
+        },
+        "required": [
+          "nodeId",
+          "token"
+        ],
+        "type": "object"
+      },
+      "NodeLive": {
+        "description": "NodeLive is the live state of one node as last reported over the link.",
+        "properties": {
+          "cpuCores": {
+            "example": 4,
+            "type": "integer"
+          },
+          "cpuMhz": {
+            "example": 2400,
+            "type": "number"
+          },
+          "cpuPct": {
+            "example": 12.5,
+            "type": "number"
+          },
+          "diskTotal": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "diskUsed": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "journalBytes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "lastSeen": {
+            "example": 1700000000,
+            "format": "int64",
+            "type": "integer"
+          },
+          "latencyMs": {
+            "example": 42,
+            "type": "integer"
+          },
+          "memTotal": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "memUsed": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "netDownBps": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "netRecvTotal": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "netSentTotal": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "netUpBps": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "nodeId": {
+            "example": 1,
+            "type": "integer"
+          },
+          "nodeVersion": {
+            "example": "v0.1.0",
+            "type": "string"
+          },
+          "online": {
+            "example": true,
+            "type": "boolean"
+          },
+          "onlineClients": {
+            "type": "integer"
+          },
+          "swapTotal": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "swapUsed": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "tcpSockets": {
+            "type": "integer"
+          },
+          "udpSockets": {
+            "type": "integer"
+          },
+          "uptimeSecs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "xrayError": {
+            "type": "string"
+          },
+          "xrayState": {
+            "example": "not_configured",
+            "type": "string"
+          },
+          "xrayVersion": {
+            "example": "26.3.27",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cpuCores",
+          "cpuMhz",
+          "cpuPct",
+          "diskTotal",
+          "diskUsed",
+          "journalBytes",
+          "lastSeen",
+          "latencyMs",
+          "memTotal",
+          "memUsed",
+          "netDownBps",
+          "netRecvTotal",
+          "netSentTotal",
+          "netUpBps",
+          "nodeId",
+          "nodeVersion",
+          "online",
+          "onlineClients",
+          "swapTotal",
+          "swapUsed",
+          "tcpSockets",
+          "udpSockets",
           "uptimeSecs",
           "xrayError",
           "xrayState",
@@ -5036,7 +5201,7 @@
     },
     {
       "name": "Nodes",
-      "description": "Manage remote 3x-ui panels acting as nodes for a central panel. All endpoints under /panel/api/nodes."
+      "description": "Manage d256 nodes (Xray daemons that dial in over gRPC + mTLS). All endpoints under /panel/api/nodes. Enrollment itself is POST {basePath}/d256/enroll, authenticated by the one-time token only."
     },
     {
       "name": "Hosts",
@@ -11234,7 +11399,7 @@
         "tags": [
           "Nodes"
         ],
-        "summary": "List every configured node with its connection details, health, and last heartbeat patch.",
+        "summary": "List every node with its enrollment state, health and last heartbeat.",
         "operationId": "get_panel_api_nodes_list",
         "responses": {
           "200": {
@@ -11317,121 +11482,12 @@
         }
       }
     },
-    "/panel/api/nodes/mtls/ca": {
-      "post": {
-        "tags": [
-          "Nodes"
-        ],
-        "summary": "This panel's node-auth CA certificate (public, PEM) to paste into a node's mTLS trust setting. Lazily mints the CA and the master client cert on first call. Pair with setting tlsVerifyMode=mtls on the node.",
-        "operationId": "post_panel_api_nodes_mtls_ca",
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "msg": {
-                      "type": "string"
-                    },
-                    "obj": {}
-                  }
-                },
-                "example": {
-                  "success": true,
-                  "obj": {
-                    "caCert": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/panel/api/nodes/mtls/trustCA": {
-      "post": {
-        "tags": [
-          "Nodes"
-        ],
-        "summary": "Set the CA certificate this panel trusts for incoming node-API client certificates (this panel acting as a node). Paste the managing panel's CA (from nodes/mtls/ca). An empty caCert disables it. A non-empty value must be a PEM certificate. Applied on the next panel restart.",
-        "operationId": "post_panel_api_nodes_mtls_trustCA",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              },
-              "example": {
-                "caCert": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "msg": {
-                      "type": "string"
-                    },
-                    "obj": {}
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/panel/api/nodes/mtls/reloadClient": {
-      "post": {
-        "tags": [
-          "Nodes"
-        ],
-        "summary": "Validate the stored master mTLS client credential and invalidate cached transports. Each transport closes its old idle pool and rebuilds with the rotated certificate before its next request.",
-        "operationId": "post_panel_api_nodes_mtls_reloadClient",
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "msg": {
-                      "type": "string"
-                    },
-                    "obj": {}
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/panel/api/nodes/get/{id}": {
       "get": {
         "tags": [
           "Nodes"
         ],
-        "summary": "Fetch a single node by ID.",
+        "summary": "Get one node.",
         "operationId": "get_panel_api_nodes_get_id",
         "parameters": [
           {
@@ -11520,24 +11576,13 @@
         }
       }
     },
-    "/panel/api/nodes/webCert/{id}": {
+    "/panel/api/nodes/live": {
       "get": {
         "tags": [
           "Nodes"
         ],
-        "summary": "Fetch a node's own web TLS certificate/key file paths (proxied to the node). Used by the inbound form's \"Set Cert from Panel\" so a node-assigned inbound gets paths that exist on the node, not the central panel.",
-        "operationId": "get_panel_api_nodes_webCert_id",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "Node ID.",
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
+        "summary": "Latest live metrics (CPU, RAM, swap, disk, network, TCP/UDP sockets, Xray state, versions) of every node seen since the panel started.",
+        "operationId": "get_panel_api_nodes_live",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -11552,15 +11597,46 @@
                     "msg": {
                       "type": "string"
                     },
-                    "obj": {}
+                    "obj": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/NodeLive"
+                      }
+                    }
                   }
                 },
                 "example": {
                   "success": true,
-                  "obj": {
-                    "webCertFile": "/root/cert/example.com/fullchain.pem",
-                    "webKeyFile": "/root/cert/example.com/privkey.pem"
-                  }
+                  "obj": [
+                    {
+                      "cpuCores": 4,
+                      "cpuMhz": 2400,
+                      "cpuPct": 12.5,
+                      "diskTotal": 0,
+                      "diskUsed": 0,
+                      "journalBytes": 0,
+                      "lastSeen": 1700000000,
+                      "latencyMs": 42,
+                      "memTotal": 0,
+                      "memUsed": 0,
+                      "netDownBps": 0,
+                      "netRecvTotal": 0,
+                      "netSentTotal": 0,
+                      "netUpBps": 0,
+                      "nodeId": 1,
+                      "nodeVersion": "v0.1.0",
+                      "online": true,
+                      "onlineClients": 0,
+                      "swapTotal": 0,
+                      "swapUsed": 0,
+                      "tcpSockets": 0,
+                      "udpSockets": 0,
+                      "uptimeSecs": 0,
+                      "xrayError": "",
+                      "xrayState": "not_configured",
+                      "xrayVersion": "26.3.27"
+                    }
+                  ]
                 }
               }
             }
@@ -11568,13 +11644,13 @@
         }
       }
     },
-    "/panel/api/nodes/add": {
+    "/panel/api/nodes/create": {
       "post": {
         "tags": [
           "Nodes"
         ],
-        "summary": "Register a new remote node. Provide its URL, write-only apiToken, and optional remark / allowPrivateAddress flag. Responses expose hasApiToken only.",
-        "operationId": "post_panel_api_nodes_add",
+        "summary": "Register a pending node and return its one-time enrollment token (valid for 1 hour, shown only once). Run `d256-node enroll <panel-url> <token>` on the node.",
+        "operationId": "post_panel_api_nodes_create",
         "requestBody": {
           "required": true,
           "content": {
@@ -11585,14 +11661,7 @@
               "example": {
                 "name": "de-fra-1",
                 "remark": "",
-                "scheme": "https",
-                "address": "node1.example.com",
-                "port": 2053,
-                "basePath": "/",
-                "apiToken": "abcdef...",
-                "clearApiToken": false,
-                "enable": true,
-                "allowPrivateAddress": false
+                "address": "node1.example.com"
               }
             }
           }
@@ -11612,59 +11681,15 @@
                       "type": "string"
                     },
                     "obj": {
-                      "$ref": "#/components/schemas/NodeView"
+                      "$ref": "#/components/schemas/NodeEnrollResponse"
                     }
                   }
                 },
                 "example": {
                   "success": true,
                   "obj": {
-                    "activeCount": 20,
-                    "address": "node.example.com",
-                    "allowPrivateAddress": false,
-                    "basePath": "/",
-                    "clientCount": 25,
-                    "configDirty": false,
-                    "configDirtyAt": 0,
-                    "cpuPct": 12.5,
-                    "createdAt": 1700000000,
-                    "depletedCount": 1,
-                    "disabledCount": 2,
-                    "enable": true,
-                    "guid": "node-guid",
-                    "hasApiToken": true,
-                    "id": 1,
-                    "inboundCount": 3,
-                    "inboundSyncMode": "all",
-                    "inboundTags": [
-                      "in-443-tcp"
-                    ],
-                    "lastError": "",
-                    "lastHeartbeat": 1700000000,
-                    "latencyMs": 42,
-                    "memPct": 45.2,
-                    "name": "edge-1",
-                    "netDown": 1048576,
-                    "netUp": 2097152,
-                    "onlineCount": 5,
-                    "outboundTag": "direct",
-                    "panelVersion": "v3.x.x",
-                    "parentGuid": "",
-                    "pinnedCertSha256": "",
-                    "port": 2053,
-                    "remark": "Primary edge",
-                    "scheme": "https",
-                    "status": "online",
-                    "tlsVerifyMode": "verify",
-                    "transitive": false,
-                    "unavailableMetrics": [
-                      ""
-                    ],
-                    "updatedAt": 1700003600,
-                    "uptimeSecs": 86400,
-                    "xrayError": "",
-                    "xrayState": "running",
-                    "xrayVersion": "25.10.31"
+                    "nodeId": 1,
+                    "token": "1.k3b1..."
                   }
                 }
               }
@@ -11678,7 +11703,7 @@
         "tags": [
           "Nodes"
         ],
-        "summary": "Replace a node’s connection details. apiToken is write-only: omit it or send an empty string to keep the stored token; set clearApiToken=true to clear it.",
+        "summary": "Edit the node name, remark and public address.",
         "operationId": "post_panel_api_nodes_update_id",
         "parameters": [
           {
@@ -11701,14 +11726,7 @@
               "example": {
                 "name": "de-fra-1",
                 "remark": "",
-                "scheme": "https",
-                "address": "node1.example.com",
-                "port": 2053,
-                "basePath": "/",
-                "apiToken": "",
-                "clearApiToken": false,
-                "enable": true,
-                "allowPrivateAddress": false
+                "address": "node1.example.com"
               }
             }
           }
@@ -11736,12 +11754,62 @@
         }
       }
     },
+    "/panel/api/nodes/enrollToken/{id}": {
+      "post": {
+        "tags": [
+          "Nodes"
+        ],
+        "summary": "Revoke the node certificate, disconnect the node and issue a new one-time enrollment token.",
+        "operationId": "post_panel_api_nodes_enrollToken_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Node ID.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "$ref": "#/components/schemas/NodeEnrollResponse"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "nodeId": 1,
+                    "token": "1.k3b1..."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/nodes/del/{id}": {
       "post": {
         "tags": [
           "Nodes"
         ],
-        "summary": "Delete a node. Inbounds bound to it are not auto-migrated.",
+        "summary": "Delete a node. Refused while inbounds are still attached to it.",
         "operationId": "post_panel_api_nodes_del_id",
         "parameters": [
           {
@@ -11782,7 +11850,7 @@
         "tags": [
           "Nodes"
         ],
-        "summary": "Pause or resume traffic sync with this node.",
+        "summary": "Allow or block the node link. Disabling disconnects a connected node.",
         "operationId": "post_panel_api_nodes_setEnable_id",
         "parameters": [
           {
@@ -11831,287 +11899,6 @@
         }
       }
     },
-    "/panel/api/nodes/test": {
-      "post": {
-        "tags": [
-          "Nodes"
-        ],
-        "summary": "Probe a node without saving it. Uses the body as connection details and returns the same heartbeat snapshot a registered node would have.",
-        "operationId": "post_panel_api_nodes_test",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              },
-              "example": {
-                "scheme": "https",
-                "address": "node1.example.com",
-                "port": 2053,
-                "basePath": "/",
-                "apiToken": "abcdef..."
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "msg": {
-                      "type": "string"
-                    },
-                    "obj": {
-                      "$ref": "#/components/schemas/ProbeResultUI"
-                    }
-                  }
-                },
-                "example": {
-                  "success": true,
-                  "obj": {
-                    "cpuPct": 12.5,
-                    "error": "",
-                    "latencyMs": 42,
-                    "memPct": 45.2,
-                    "panelVersion": "v3.x.x",
-                    "status": "online",
-                    "unavailableMetrics": [
-                      ""
-                    ],
-                    "uptimeSecs": 86400,
-                    "xrayError": "",
-                    "xrayState": "",
-                    "xrayVersion": "25.10.31"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/panel/api/nodes/certFingerprint": {
-      "post": {
-        "tags": [
-          "Nodes"
-        ],
-        "summary": "Connect to the node over HTTPS without verifying its certificate and return the leaf certificate's SHA-256 (base64). Used by the Add/Edit Node dialog to fetch and pin a self-signed certificate. Uses the same body as /test.",
-        "operationId": "post_panel_api_nodes_certFingerprint",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              },
-              "example": {
-                "scheme": "https",
-                "address": "node1.example.com",
-                "port": 2053,
-                "basePath": "/"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "msg": {
-                      "type": "string"
-                    },
-                    "obj": {}
-                  }
-                },
-                "example": {
-                  "success": true,
-                  "obj": "k3b1...base64-sha256...="
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/panel/api/nodes/inbounds": {
-      "post": {
-        "tags": [
-          "Nodes"
-        ],
-        "summary": "Use unsaved node connection details to list the remote inbounds available for selective import.",
-        "operationId": "post_panel_api_nodes_inbounds",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              },
-              "example": {
-                "name": "de-fra-1",
-                "scheme": "https",
-                "address": "node1.example.com",
-                "port": 2053,
-                "basePath": "/",
-                "apiToken": "abcdef..."
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "msg": {
-                      "type": "string"
-                    },
-                    "obj": {}
-                  }
-                },
-                "example": {
-                  "success": true,
-                  "obj": [
-                    {
-                      "tag": "inbound-443",
-                      "remark": "VLESS",
-                      "protocol": "vless",
-                      "port": 443
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/panel/api/nodes/probe/{id}": {
-      "post": {
-        "tags": [
-          "Nodes"
-        ],
-        "summary": "Probe an existing node, updating its cached health state.",
-        "operationId": "post_panel_api_nodes_probe_id",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "Node ID.",
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "msg": {
-                      "type": "string"
-                    },
-                    "obj": {}
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/panel/api/nodes/updatePanel": {
-      "post": {
-        "tags": [
-          "Nodes"
-        ],
-        "summary": "Trigger the official panel self-updater on each given node (downloads the latest release and restarts). Only enabled, online nodes are updated; offline/disabled ones are reported as skipped. Set \"dev\": true to move the nodes to the rolling per-commit dev channel instead of the latest stable release. Returns a per-node result list.",
-        "operationId": "post_panel_api_nodes_updatePanel",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              },
-              "example": {
-                "ids": [
-                  1,
-                  2,
-                  3
-                ],
-                "dev": false
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "msg": {
-                      "type": "string"
-                    },
-                    "obj": {}
-                  }
-                },
-                "example": {
-                  "success": true,
-                  "obj": [
-                    {
-                      "id": 1,
-                      "name": "de-1",
-                      "ok": true
-                    },
-                    {
-                      "id": 2,
-                      "name": "fr-1",
-                      "ok": false,
-                      "error": "node is offline"
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/panel/api/nodes/history/{id}/{metric}/{bucket}": {
       "get": {
         "tags": [
@@ -12133,7 +11920,7 @@
             "name": "metric",
             "in": "path",
             "required": true,
-            "description": "cpu | mem.",
+            "description": "cpu | mem | netUp | netDown.",
             "schema": {
               "type": "string"
             }

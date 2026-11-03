@@ -1697,121 +1697,65 @@ export const sections: readonly Section[] = [
     id: 'nodes',
     title: 'Nodes',
     description:
-      'Manage remote 3x-ui panels acting as nodes for a central panel. All endpoints under /panel/api/nodes.',
+      'Manage d256 nodes (Xray daemons that dial in over gRPC + mTLS). All endpoints under /panel/api/nodes. Enrollment itself is POST {basePath}/d256/enroll, authenticated by the one-time token only.',
     endpoints: [
       {
         method: 'GET',
         path: '/panel/api/nodes/list',
-        summary:
-          'List every configured node with its connection details, health, and last heartbeat patch.',
+        summary: 'List every node with its enrollment state, health and last heartbeat.',
         responseSchema: 'NodeView',
         responseSchemaArray: true,
       },
       {
-        method: 'POST',
-        path: '/panel/api/nodes/mtls/ca',
-        summary:
-          "This panel's node-auth CA certificate (public, PEM) to paste into a node's mTLS trust setting. Lazily mints the CA and the master client cert on first call. Pair with setting tlsVerifyMode=mtls on the node.",
-        response:
-          '{\n  "success": true,\n  "obj": {\n    "caCert": "-----BEGIN CERTIFICATE-----\\n...\\n-----END CERTIFICATE-----\\n"\n  }\n}',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/nodes/mtls/trustCA',
-        summary:
-          "Set the CA certificate this panel trusts for incoming node-API client certificates (this panel acting as a node). Paste the managing panel's CA (from nodes/mtls/ca). An empty caCert disables it. A non-empty value must be a PEM certificate. Applied on the next panel restart.",
-        body: '{\n  "caCert": "-----BEGIN CERTIFICATE-----\\n...\\n-----END CERTIFICATE-----\\n"\n}',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/nodes/mtls/reloadClient',
-        summary:
-          'Validate the stored master mTLS client credential and invalidate cached transports. Each transport closes its old idle pool and rebuilds with the rotated certificate before its next request.',
-      },
-      {
         method: 'GET',
         path: '/panel/api/nodes/get/:id',
-        summary: 'Fetch a single node by ID.',
+        summary: 'Get one node.',
         params: [{ name: 'id', in: 'path', type: 'number', desc: 'Node ID.' }],
         responseSchema: 'NodeView',
       },
       {
         method: 'GET',
-        path: '/panel/api/nodes/webCert/:id',
+        path: '/panel/api/nodes/live',
         summary:
-          'Fetch a node\'s own web TLS certificate/key file paths (proxied to the node). Used by the inbound form\'s "Set Cert from Panel" so a node-assigned inbound gets paths that exist on the node, not the central panel.',
-        params: [{ name: 'id', in: 'path', type: 'number', desc: 'Node ID.' }],
-        response:
-          '{\n  "success": true,\n  "obj": {\n    "webCertFile": "/root/cert/example.com/fullchain.pem",\n    "webKeyFile": "/root/cert/example.com/privkey.pem"\n  }\n}',
+          'Latest live metrics (CPU, RAM, swap, disk, network, TCP/UDP sockets, Xray state, versions) of every node seen since the panel started.',
+        responseSchema: 'NodeLive',
+        responseSchemaArray: true,
       },
       {
         method: 'POST',
-        path: '/panel/api/nodes/add',
+        path: '/panel/api/nodes/create',
         summary:
-          'Register a new remote node. Provide its URL, write-only apiToken, and optional remark / allowPrivateAddress flag. Responses expose hasApiToken only.',
-        body: '{\n  "name": "de-fra-1",\n  "remark": "",\n  "scheme": "https",\n  "address": "node1.example.com",\n  "port": 2053,\n  "basePath": "/",\n  "apiToken": "abcdef...",\n  "clearApiToken": false,\n  "enable": true,\n  "allowPrivateAddress": false\n}',
-        responseSchema: 'NodeView',
+          'Register a pending node and return its one-time enrollment token (valid for 1 hour, shown only once). Run `d256-node enroll <panel-url> <token>` on the node.',
+        body: '{\n  "name": "de-fra-1",\n  "remark": "",\n  "address": "node1.example.com"\n}',
+        responseSchema: 'NodeEnrollResponse',
       },
       {
         method: 'POST',
         path: '/panel/api/nodes/update/:id',
-        summary:
-          'Replace a node\u2019s connection details. apiToken is write-only: omit it or send an empty string to keep the stored token; set clearApiToken=true to clear it.',
+        summary: 'Edit the node name, remark and public address.',
         params: [{ name: 'id', in: 'path', type: 'number', desc: 'Node ID.' }],
-        body: '{\n  "name": "de-fra-1",\n  "remark": "",\n  "scheme": "https",\n  "address": "node1.example.com",\n  "port": 2053,\n  "basePath": "/",\n  "apiToken": "",\n  "clearApiToken": false,\n  "enable": true,\n  "allowPrivateAddress": false\n}',
+        body: '{\n  "name": "de-fra-1",\n  "remark": "",\n  "address": "node1.example.com"\n}',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/nodes/enrollToken/:id',
+        summary:
+          'Revoke the node certificate, disconnect the node and issue a new one-time enrollment token.',
+        params: [{ name: 'id', in: 'path', type: 'number', desc: 'Node ID.' }],
+        responseSchema: 'NodeEnrollResponse',
       },
       {
         method: 'POST',
         path: '/panel/api/nodes/del/:id',
-        summary: 'Delete a node. Inbounds bound to it are not auto-migrated.',
+        summary: 'Delete a node. Refused while inbounds are still attached to it.',
         params: [{ name: 'id', in: 'path', type: 'number', desc: 'Node ID.' }],
       },
       {
         method: 'POST',
         path: '/panel/api/nodes/setEnable/:id',
-        summary: 'Pause or resume traffic sync with this node.',
+        summary: 'Allow or block the node link. Disabling disconnects a connected node.',
         params: [{ name: 'id', in: 'path', type: 'number', desc: 'Node ID.' }],
         body: '{\n  "enable": true\n}',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/nodes/test',
-        summary:
-          'Probe a node without saving it. Uses the body as connection details and returns the same heartbeat snapshot a registered node would have.',
-        body: '{\n  "scheme": "https",\n  "address": "node1.example.com",\n  "port": 2053,\n  "basePath": "/",\n  "apiToken": "abcdef..."\n}',
-        responseSchema: 'ProbeResultUI',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/nodes/certFingerprint',
-        summary:
-          "Connect to the node over HTTPS without verifying its certificate and return the leaf certificate's SHA-256 (base64). Used by the Add/Edit Node dialog to fetch and pin a self-signed certificate. Uses the same body as /test.",
-        body: '{\n  "scheme": "https",\n  "address": "node1.example.com",\n  "port": 2053,\n  "basePath": "/"\n}',
-        response: '{\n  "success": true,\n  "obj": "k3b1...base64-sha256...="\n}',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/nodes/inbounds',
-        summary:
-          'Use unsaved node connection details to list the remote inbounds available for selective import.',
-        body: '{\n  "name": "de-fra-1",\n  "scheme": "https",\n  "address": "node1.example.com",\n  "port": 2053,\n  "basePath": "/",\n  "apiToken": "abcdef..."\n}',
-        response:
-          '{\n  "success": true,\n  "obj": [\n    { "tag": "inbound-443", "remark": "VLESS", "protocol": "vless", "port": 443 }\n  ]\n}',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/nodes/probe/:id',
-        summary: 'Probe an existing node, updating its cached health state.',
-        params: [{ name: 'id', in: 'path', type: 'number', desc: 'Node ID.' }],
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/nodes/updatePanel',
-        summary:
-          'Trigger the official panel self-updater on each given node (downloads the latest release and restarts). Only enabled, online nodes are updated; offline/disabled ones are reported as skipped. Set "dev": true to move the nodes to the rolling per-commit dev channel instead of the latest stable release. Returns a per-node result list.',
-        body: '{\n  "ids": [1, 2, 3],\n  "dev": false\n}',
-        response:
-          '{\n  "success": true,\n  "obj": [\n    { "id": 1, "name": "de-1", "ok": true },\n    { "id": 2, "name": "fr-1", "ok": false, "error": "node is offline" }\n  ]\n}',
       },
       {
         method: 'GET',
@@ -1820,7 +1764,7 @@ export const sections: readonly Section[] = [
           'Aggregated metric history for a node — same shape as /server/history, scoped to one node.',
         params: [
           { name: 'id', in: 'path', type: 'number', desc: 'Node ID.' },
-          { name: 'metric', in: 'path', type: 'string', desc: 'cpu | mem.' },
+          { name: 'metric', in: 'path', type: 'string', desc: 'cpu | mem | netUp | netDown.' },
           {
             name: 'bucket',
             in: 'path',

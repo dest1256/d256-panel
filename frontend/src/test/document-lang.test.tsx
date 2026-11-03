@@ -10,8 +10,8 @@ describe('readyI18n page language', () => {
   });
 
   it.each([
-    ['panel', 'lang', 'fa-IR'],
-    ['subscription', 'subLang', 'zh-TW'],
+    ['panel', 'lang', 'ru-RU'],
+    ['subscription', 'subLang', 'ru-RU'],
   ] as const)('sets <html lang> to the active %s locale', async (scope, cookie, locale) => {
     vi.resetModules();
     document.cookie = `${cookie}=${locale}; path=/`;

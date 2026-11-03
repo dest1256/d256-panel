@@ -75,6 +75,8 @@ type NodeToPanel struct {
 	//
 	//	*NodeToPanel_Hello
 	//	*NodeToPanel_Heartbeat
+	//	*NodeToPanel_SystemMetrics
+	//	*NodeToPanel_XrayStatus
 	Msg           isNodeToPanel_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -135,6 +137,24 @@ func (x *NodeToPanel) GetHeartbeat() *Heartbeat {
 	return nil
 }
 
+func (x *NodeToPanel) GetSystemMetrics() *SystemMetrics {
+	if x != nil {
+		if x, ok := x.Msg.(*NodeToPanel_SystemMetrics); ok {
+			return x.SystemMetrics
+		}
+	}
+	return nil
+}
+
+func (x *NodeToPanel) GetXrayStatus() *XrayStatus {
+	if x != nil {
+		if x, ok := x.Msg.(*NodeToPanel_XrayStatus); ok {
+			return x.XrayStatus
+		}
+	}
+	return nil
+}
+
 type isNodeToPanel_Msg interface {
 	isNodeToPanel_Msg()
 }
@@ -147,9 +167,21 @@ type NodeToPanel_Heartbeat struct {
 	Heartbeat *Heartbeat `protobuf:"bytes,2,opt,name=heartbeat,proto3,oneof"`
 }
 
+type NodeToPanel_SystemMetrics struct {
+	SystemMetrics *SystemMetrics `protobuf:"bytes,3,opt,name=system_metrics,json=systemMetrics,proto3,oneof"`
+}
+
+type NodeToPanel_XrayStatus struct {
+	XrayStatus *XrayStatus `protobuf:"bytes,4,opt,name=xray_status,json=xrayStatus,proto3,oneof"`
+}
+
 func (*NodeToPanel_Hello) isNodeToPanel_Msg() {}
 
 func (*NodeToPanel_Heartbeat) isNodeToPanel_Msg() {}
+
+func (*NodeToPanel_SystemMetrics) isNodeToPanel_Msg() {}
+
+func (*NodeToPanel_XrayStatus) isNodeToPanel_Msg() {}
 
 type PanelToNode struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -369,9 +401,12 @@ func (x *HelloAck) GetReason() string {
 	return ""
 }
 
+// The node sends Heartbeat{unix_nanos}; the panel echoes it back unchanged. The node measures the round
+// trip and reports it in its next heartbeat as last_rtt_ms (panel-initiated pings are not needed).
 type Heartbeat struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UnixNanos     int64                  `protobuf:"varint,1,opt,name=unix_nanos,json=unixNanos,proto3" json:"unix_nanos,omitempty"`
+	LastRttMs     uint32                 `protobuf:"varint,2,opt,name=last_rtt_ms,json=lastRttMs,proto3" json:"last_rtt_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -413,14 +448,272 @@ func (x *Heartbeat) GetUnixNanos() int64 {
 	return 0
 }
 
+func (x *Heartbeat) GetLastRttMs() uint32 {
+	if x != nil {
+		return x.LastRttMs
+	}
+	return 0
+}
+
+type SystemMetrics struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CpuPct        float64                `protobuf:"fixed64,1,opt,name=cpu_pct,json=cpuPct,proto3" json:"cpu_pct,omitempty"`
+	CpuCores      uint32                 `protobuf:"varint,2,opt,name=cpu_cores,json=cpuCores,proto3" json:"cpu_cores,omitempty"`
+	CpuMhz        float64                `protobuf:"fixed64,3,opt,name=cpu_mhz,json=cpuMhz,proto3" json:"cpu_mhz,omitempty"`
+	MemTotal      uint64                 `protobuf:"varint,4,opt,name=mem_total,json=memTotal,proto3" json:"mem_total,omitempty"`
+	MemUsed       uint64                 `protobuf:"varint,5,opt,name=mem_used,json=memUsed,proto3" json:"mem_used,omitempty"`
+	SwapTotal     uint64                 `protobuf:"varint,6,opt,name=swap_total,json=swapTotal,proto3" json:"swap_total,omitempty"`
+	SwapUsed      uint64                 `protobuf:"varint,7,opt,name=swap_used,json=swapUsed,proto3" json:"swap_used,omitempty"`
+	DiskTotal     uint64                 `protobuf:"varint,8,opt,name=disk_total,json=diskTotal,proto3" json:"disk_total,omitempty"`
+	DiskUsed      uint64                 `protobuf:"varint,9,opt,name=disk_used,json=diskUsed,proto3" json:"disk_used,omitempty"`
+	NetUpBps      uint64                 `protobuf:"varint,10,opt,name=net_up_bps,json=netUpBps,proto3" json:"net_up_bps,omitempty"`
+	NetDownBps    uint64                 `protobuf:"varint,11,opt,name=net_down_bps,json=netDownBps,proto3" json:"net_down_bps,omitempty"`
+	NetSentTotal  uint64                 `protobuf:"varint,12,opt,name=net_sent_total,json=netSentTotal,proto3" json:"net_sent_total,omitempty"`
+	NetRecvTotal  uint64                 `protobuf:"varint,13,opt,name=net_recv_total,json=netRecvTotal,proto3" json:"net_recv_total,omitempty"`
+	TcpSockets    uint32                 `protobuf:"varint,14,opt,name=tcp_sockets,json=tcpSockets,proto3" json:"tcp_sockets,omitempty"`
+	UdpSockets    uint32                 `protobuf:"varint,15,opt,name=udp_sockets,json=udpSockets,proto3" json:"udp_sockets,omitempty"`
+	UptimeSecs    uint64                 `protobuf:"varint,16,opt,name=uptime_secs,json=uptimeSecs,proto3" json:"uptime_secs,omitempty"`
+	JournalBytes  uint64                 `protobuf:"varint,17,opt,name=journal_bytes,json=journalBytes,proto3" json:"journal_bytes,omitempty"`
+	OnlineClients uint32                 `protobuf:"varint,18,opt,name=online_clients,json=onlineClients,proto3" json:"online_clients,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SystemMetrics) Reset() {
+	*x = SystemMetrics{}
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SystemMetrics) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SystemMetrics) ProtoMessage() {}
+
+func (x *SystemMetrics) ProtoReflect() protoreflect.Message {
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SystemMetrics.ProtoReflect.Descriptor instead.
+func (*SystemMetrics) Descriptor() ([]byte, []int) {
+	return file_nodelink_v1_nodelink_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *SystemMetrics) GetCpuPct() float64 {
+	if x != nil {
+		return x.CpuPct
+	}
+	return 0
+}
+
+func (x *SystemMetrics) GetCpuCores() uint32 {
+	if x != nil {
+		return x.CpuCores
+	}
+	return 0
+}
+
+func (x *SystemMetrics) GetCpuMhz() float64 {
+	if x != nil {
+		return x.CpuMhz
+	}
+	return 0
+}
+
+func (x *SystemMetrics) GetMemTotal() uint64 {
+	if x != nil {
+		return x.MemTotal
+	}
+	return 0
+}
+
+func (x *SystemMetrics) GetMemUsed() uint64 {
+	if x != nil {
+		return x.MemUsed
+	}
+	return 0
+}
+
+func (x *SystemMetrics) GetSwapTotal() uint64 {
+	if x != nil {
+		return x.SwapTotal
+	}
+	return 0
+}
+
+func (x *SystemMetrics) GetSwapUsed() uint64 {
+	if x != nil {
+		return x.SwapUsed
+	}
+	return 0
+}
+
+func (x *SystemMetrics) GetDiskTotal() uint64 {
+	if x != nil {
+		return x.DiskTotal
+	}
+	return 0
+}
+
+func (x *SystemMetrics) GetDiskUsed() uint64 {
+	if x != nil {
+		return x.DiskUsed
+	}
+	return 0
+}
+
+func (x *SystemMetrics) GetNetUpBps() uint64 {
+	if x != nil {
+		return x.NetUpBps
+	}
+	return 0
+}
+
+func (x *SystemMetrics) GetNetDownBps() uint64 {
+	if x != nil {
+		return x.NetDownBps
+	}
+	return 0
+}
+
+func (x *SystemMetrics) GetNetSentTotal() uint64 {
+	if x != nil {
+		return x.NetSentTotal
+	}
+	return 0
+}
+
+func (x *SystemMetrics) GetNetRecvTotal() uint64 {
+	if x != nil {
+		return x.NetRecvTotal
+	}
+	return 0
+}
+
+func (x *SystemMetrics) GetTcpSockets() uint32 {
+	if x != nil {
+		return x.TcpSockets
+	}
+	return 0
+}
+
+func (x *SystemMetrics) GetUdpSockets() uint32 {
+	if x != nil {
+		return x.UdpSockets
+	}
+	return 0
+}
+
+func (x *SystemMetrics) GetUptimeSecs() uint64 {
+	if x != nil {
+		return x.UptimeSecs
+	}
+	return 0
+}
+
+func (x *SystemMetrics) GetJournalBytes() uint64 {
+	if x != nil {
+		return x.JournalBytes
+	}
+	return 0
+}
+
+func (x *SystemMetrics) GetOnlineClients() uint32 {
+	if x != nil {
+		return x.OnlineClients
+	}
+	return 0
+}
+
+type XrayStatus struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	State               string                 `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"` // running | stopped | error | not_configured
+	Error               string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
+	Version             string                 `protobuf:"bytes,3,opt,name=version,proto3" json:"version,omitempty"`
+	AppliedStateVersion uint64                 `protobuf:"varint,4,opt,name=applied_state_version,json=appliedStateVersion,proto3" json:"applied_state_version,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *XrayStatus) Reset() {
+	*x = XrayStatus{}
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *XrayStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*XrayStatus) ProtoMessage() {}
+
+func (x *XrayStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use XrayStatus.ProtoReflect.Descriptor instead.
+func (*XrayStatus) Descriptor() ([]byte, []int) {
+	return file_nodelink_v1_nodelink_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *XrayStatus) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *XrayStatus) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *XrayStatus) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *XrayStatus) GetAppliedStateVersion() uint64 {
+	if x != nil {
+		return x.AppliedStateVersion
+	}
+	return 0
+}
+
 var File_nodelink_v1_nodelink_proto protoreflect.FileDescriptor
 
 const file_nodelink_v1_nodelink_proto_rawDesc = "" +
 	"\n" +
-	"\x1anodelink/v1/nodelink.proto\x12\x10d256.nodelink.v1\"\x82\x01\n" +
+	"\x1anodelink/v1/nodelink.proto\x12\x10d256.nodelink.v1\"\x8d\x02\n" +
 	"\vNodeToPanel\x12/\n" +
 	"\x05hello\x18\x01 \x01(\v2\x17.d256.nodelink.v1.HelloH\x00R\x05hello\x12;\n" +
-	"\theartbeat\x18\x02 \x01(\v2\x1b.d256.nodelink.v1.HeartbeatH\x00R\theartbeatB\x05\n" +
+	"\theartbeat\x18\x02 \x01(\v2\x1b.d256.nodelink.v1.HeartbeatH\x00R\theartbeat\x12H\n" +
+	"\x0esystem_metrics\x18\x03 \x01(\v2\x1f.d256.nodelink.v1.SystemMetricsH\x00R\rsystemMetrics\x12?\n" +
+	"\vxray_status\x18\x04 \x01(\v2\x1c.d256.nodelink.v1.XrayStatusH\x00R\n" +
+	"xrayStatusB\x05\n" +
 	"\x03msg\"\x8c\x01\n" +
 	"\vPanelToNode\x129\n" +
 	"\thello_ack\x18\x01 \x01(\v2\x1a.d256.nodelink.v1.HelloAckH\x00R\bhelloAck\x12;\n" +
@@ -435,10 +728,44 @@ const file_nodelink_v1_nodelink_proto_rawDesc = "" +
 	"\bHelloAck\x12\x1a\n" +
 	"\baccepted\x18\x01 \x01(\bR\baccepted\x120\n" +
 	"\x14min_protocol_version\x18\x02 \x01(\rR\x12minProtocolVersion\x12\x16\n" +
-	"\x06reason\x18\x03 \x01(\tR\x06reason\"*\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\"J\n" +
 	"\tHeartbeat\x12\x1d\n" +
 	"\n" +
-	"unix_nanos\x18\x01 \x01(\x03R\tunixNanos*K\n" +
+	"unix_nanos\x18\x01 \x01(\x03R\tunixNanos\x12\x1e\n" +
+	"\vlast_rtt_ms\x18\x02 \x01(\rR\tlastRttMs\"\xc9\x04\n" +
+	"\rSystemMetrics\x12\x17\n" +
+	"\acpu_pct\x18\x01 \x01(\x01R\x06cpuPct\x12\x1b\n" +
+	"\tcpu_cores\x18\x02 \x01(\rR\bcpuCores\x12\x17\n" +
+	"\acpu_mhz\x18\x03 \x01(\x01R\x06cpuMhz\x12\x1b\n" +
+	"\tmem_total\x18\x04 \x01(\x04R\bmemTotal\x12\x19\n" +
+	"\bmem_used\x18\x05 \x01(\x04R\amemUsed\x12\x1d\n" +
+	"\n" +
+	"swap_total\x18\x06 \x01(\x04R\tswapTotal\x12\x1b\n" +
+	"\tswap_used\x18\a \x01(\x04R\bswapUsed\x12\x1d\n" +
+	"\n" +
+	"disk_total\x18\b \x01(\x04R\tdiskTotal\x12\x1b\n" +
+	"\tdisk_used\x18\t \x01(\x04R\bdiskUsed\x12\x1c\n" +
+	"\n" +
+	"net_up_bps\x18\n" +
+	" \x01(\x04R\bnetUpBps\x12 \n" +
+	"\fnet_down_bps\x18\v \x01(\x04R\n" +
+	"netDownBps\x12$\n" +
+	"\x0enet_sent_total\x18\f \x01(\x04R\fnetSentTotal\x12$\n" +
+	"\x0enet_recv_total\x18\r \x01(\x04R\fnetRecvTotal\x12\x1f\n" +
+	"\vtcp_sockets\x18\x0e \x01(\rR\n" +
+	"tcpSockets\x12\x1f\n" +
+	"\vudp_sockets\x18\x0f \x01(\rR\n" +
+	"udpSockets\x12\x1f\n" +
+	"\vuptime_secs\x18\x10 \x01(\x04R\n" +
+	"uptimeSecs\x12#\n" +
+	"\rjournal_bytes\x18\x11 \x01(\x04R\fjournalBytes\x12%\n" +
+	"\x0eonline_clients\x18\x12 \x01(\rR\ronlineClients\"\x86\x01\n" +
+	"\n" +
+	"XrayStatus\x12\x14\n" +
+	"\x05state\x18\x01 \x01(\tR\x05state\x12\x14\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error\x12\x18\n" +
+	"\aversion\x18\x03 \x01(\tR\aversion\x122\n" +
+	"\x15applied_state_version\x18\x04 \x01(\x04R\x13appliedStateVersion*K\n" +
 	"\x0fProtocolVersion\x12 \n" +
 	"\x1cPROTOCOL_VERSION_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12PROTOCOL_VERSION_1\x10\x012W\n" +
@@ -458,27 +785,31 @@ func file_nodelink_v1_nodelink_proto_rawDescGZIP() []byte {
 }
 
 var file_nodelink_v1_nodelink_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_nodelink_v1_nodelink_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_nodelink_v1_nodelink_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_nodelink_v1_nodelink_proto_goTypes = []any{
-	(ProtocolVersion)(0), // 0: d256.nodelink.v1.ProtocolVersion
-	(*NodeToPanel)(nil),  // 1: d256.nodelink.v1.NodeToPanel
-	(*PanelToNode)(nil),  // 2: d256.nodelink.v1.PanelToNode
-	(*Hello)(nil),        // 3: d256.nodelink.v1.Hello
-	(*HelloAck)(nil),     // 4: d256.nodelink.v1.HelloAck
-	(*Heartbeat)(nil),    // 5: d256.nodelink.v1.Heartbeat
+	(ProtocolVersion)(0),  // 0: d256.nodelink.v1.ProtocolVersion
+	(*NodeToPanel)(nil),   // 1: d256.nodelink.v1.NodeToPanel
+	(*PanelToNode)(nil),   // 2: d256.nodelink.v1.PanelToNode
+	(*Hello)(nil),         // 3: d256.nodelink.v1.Hello
+	(*HelloAck)(nil),      // 4: d256.nodelink.v1.HelloAck
+	(*Heartbeat)(nil),     // 5: d256.nodelink.v1.Heartbeat
+	(*SystemMetrics)(nil), // 6: d256.nodelink.v1.SystemMetrics
+	(*XrayStatus)(nil),    // 7: d256.nodelink.v1.XrayStatus
 }
 var file_nodelink_v1_nodelink_proto_depIdxs = []int32{
 	3, // 0: d256.nodelink.v1.NodeToPanel.hello:type_name -> d256.nodelink.v1.Hello
 	5, // 1: d256.nodelink.v1.NodeToPanel.heartbeat:type_name -> d256.nodelink.v1.Heartbeat
-	4, // 2: d256.nodelink.v1.PanelToNode.hello_ack:type_name -> d256.nodelink.v1.HelloAck
-	5, // 3: d256.nodelink.v1.PanelToNode.heartbeat:type_name -> d256.nodelink.v1.Heartbeat
-	1, // 4: d256.nodelink.v1.NodeLink.Connect:input_type -> d256.nodelink.v1.NodeToPanel
-	2, // 5: d256.nodelink.v1.NodeLink.Connect:output_type -> d256.nodelink.v1.PanelToNode
-	5, // [5:6] is the sub-list for method output_type
-	4, // [4:5] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	6, // 2: d256.nodelink.v1.NodeToPanel.system_metrics:type_name -> d256.nodelink.v1.SystemMetrics
+	7, // 3: d256.nodelink.v1.NodeToPanel.xray_status:type_name -> d256.nodelink.v1.XrayStatus
+	4, // 4: d256.nodelink.v1.PanelToNode.hello_ack:type_name -> d256.nodelink.v1.HelloAck
+	5, // 5: d256.nodelink.v1.PanelToNode.heartbeat:type_name -> d256.nodelink.v1.Heartbeat
+	1, // 6: d256.nodelink.v1.NodeLink.Connect:input_type -> d256.nodelink.v1.NodeToPanel
+	2, // 7: d256.nodelink.v1.NodeLink.Connect:output_type -> d256.nodelink.v1.PanelToNode
+	7, // [7:8] is the sub-list for method output_type
+	6, // [6:7] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_nodelink_v1_nodelink_proto_init() }
@@ -489,6 +820,8 @@ func file_nodelink_v1_nodelink_proto_init() {
 	file_nodelink_v1_nodelink_proto_msgTypes[0].OneofWrappers = []any{
 		(*NodeToPanel_Hello)(nil),
 		(*NodeToPanel_Heartbeat)(nil),
+		(*NodeToPanel_SystemMetrics)(nil),
+		(*NodeToPanel_XrayStatus)(nil),
 	}
 	file_nodelink_v1_nodelink_proto_msgTypes[1].OneofWrappers = []any{
 		(*PanelToNode_HelloAck)(nil),
@@ -500,7 +833,7 @@ func file_nodelink_v1_nodelink_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nodelink_v1_nodelink_proto_rawDesc), len(file_nodelink_v1_nodelink_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   5,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

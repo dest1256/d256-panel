@@ -287,3 +287,13 @@ func init() {
 	}
 	_ = copyFile(oldDBPath, newDBPath) // ignore error
 }
+
+// GetNodeLinkPort returns the TCP port of the node gRPC (mTLS) listener, XUI_NODELINK_PORT, default 8444.
+func GetNodeLinkPort() int {
+	if v := os.Getenv("XUI_NODELINK_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil && p >= 1 && p <= 65535 {
+			return p
+		}
+	}
+	return 8444
+}

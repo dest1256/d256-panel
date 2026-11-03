@@ -7,6 +7,7 @@ export const keys = {
   nodes: {
     root: () => ['nodes'] as const,
     list: () => ['nodes', 'list'] as const,
+    live: () => ['nodes', 'live'] as const,
   },
   hosts: {
     root: () => ['hosts'] as const,

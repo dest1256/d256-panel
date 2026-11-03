@@ -1,21 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useQuery } from '@tanstack/react-query';
 import {
-  Alert,
   Button,
   Card,
-  Checkbox,
   Col,
   ConfigProvider,
-  Input,
   Layout,
   Modal,
   Result,
   Row,
   Spin,
   Statistic,
-  Typography,
   message,
 } from 'antd';
 import {
@@ -29,43 +24,14 @@ import { useTheme } from '@/hooks/useTheme';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNodesQuery } from '@/api/queries/useNodesQuery';
 import type { NodeRecord } from '@/api/queries/useNodesQuery';
+import { useNodesLiveQuery } from '@/api/queries/useNodesLiveQuery';
 import { useNodeMutations } from '@/api/queries/useNodeMutations';
+import type { NodeFormPayload } from '@/api/queries/useNodeMutations';
 import AppSidebar from '@/layouts/AppSidebar';
 import NodeList from './NodeList';
 import NodeFormModal from './NodeFormModal';
+import EnrollModal from './EnrollModal';
 import { setMessageInstance } from '@/utils/messageBus';
-import { HttpUtil } from '@/utils';
-import type { PanelUpdateInfo } from '../index/PanelUpdateModal';
-
-// Confirm-dialog body that lets the operator pick the stable or dev channel for
-// a node panel update. Reports changes via onChange so the imperative
-// modal.confirm onOk can read the latest choice through a ref.
-function UpdateChannelChoice({ onChange }: { onChange: (dev: boolean) => void }) {
-  const { t } = useTranslation();
-  const [dev, setDev] = useState(false);
-  return (
-    <div>
-      <p>{t('pages.nodes.updateConfirmContent')}</p>
-      <Checkbox
-        checked={dev}
-        onChange={(e) => {
-          setDev(e.target.checked);
-          onChange(e.target.checked);
-        }}
-      >
-        {t('pages.nodes.updateDevChannel')}
-      </Checkbox>
-      {dev && (
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginTop: 8 }}
-          title={t('pages.index.devChannelWarning')}
-        />
-      )}
-    </div>
-  );
-}
 
 export default function NodesPage() {
   const { t } = useTranslation();
@@ -78,70 +44,13 @@ export default function NodesPage() {
   }, [messageApi]);
 
   const { nodes, loading, fetched, fetchError, refetch, totals } = useNodesQuery();
-  const {
-    create,
-    update,
-    remove,
-    setEnable,
-    testConnection,
-    fetchFingerprint,
-    fetchInbounds,
-    probe,
-    updatePanels,
-  } = useNodeMutations();
-
-  const { data: latestVersion = '' } = useQuery({
-    queryKey: ['server', 'panelUpdateInfo'],
-    queryFn: async () => {
-      const msg = await HttpUtil.get<PanelUpdateInfo>('/panel/api/server/getPanelUpdateInfo');
-      return msg?.obj?.latestVersion || '';
-    },
-    staleTime: 5 * 60 * 1000,
-  });
+  const { byId: liveById } = useNodesLiveQuery();
+  const { create, update, remove, setEnable, newEnrollToken } = useNodeMutations();
 
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<'add' | 'edit'>('add');
   const [formNode, setFormNode] = useState<NodeRecord | null>(null);
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [mtlsOpen, setMtlsOpen] = useState(false);
-  const [trustCa, setTrustCa] = useState('');
-  const [copyingCa, setCopyingCa] = useState(false);
-  const [savingTrustCa, setSavingTrustCa] = useState(false);
-
-  const onCopyNodeCa = useCallback(async () => {
-    setCopyingCa(true);
-    try {
-      const msg = await HttpUtil.post<{ caCert: string }>('/panel/api/nodes/mtls/ca');
-      const ca = msg?.obj?.caCert;
-      if (msg?.success && ca) {
-        await navigator.clipboard.writeText(ca);
-        messageApi.success(t('pages.nodes.mtls.caCopied'));
-      } else {
-        messageApi.error(msg?.msg || t('pages.nodes.mtls.caFailed'));
-      }
-    } catch {
-      messageApi.error(t('pages.nodes.mtls.caFailed'));
-    } finally {
-      setCopyingCa(false);
-    }
-  }, [messageApi, t]);
-
-  const onSaveTrustCa = useCallback(async () => {
-    setSavingTrustCa(true);
-    try {
-      const msg = await HttpUtil.post('/panel/api/nodes/mtls/trustCA', { caCert: trustCa });
-      if (msg?.success) {
-        messageApi.success(t('pages.nodes.mtls.saved'));
-        setMtlsOpen(false);
-      } else {
-        messageApi.error(msg?.msg || t('somethingWentWrong'));
-      }
-    } catch {
-      messageApi.error(t('somethingWentWrong'));
-    } finally {
-      setSavingTrustCa(false);
-    }
-  }, [trustCa, messageApi, t]);
+  const [enroll, setEnroll] = useState<{ name: string; token: string } | null>(null);
 
   const onAdd = useCallback(() => {
     setFormMode('add');
@@ -156,11 +65,11 @@ export default function NodesPage() {
   }, []);
 
   const onSave = useCallback(
-    async (payload: Partial<NodeRecord>) => {
-      if (formMode === 'edit' && formNode?.id) {
-        return update(formNode.id, payload);
-      }
-      return create(payload);
+    async (payload: NodeFormPayload) => {
+      if (formMode === 'edit' && formNode?.id) return update(formNode.id, payload);
+      const msg = await create(payload);
+      if (msg?.success && msg.obj) setEnroll({ name: payload.name, token: msg.obj.token });
+      return msg;
     },
     [formMode, formNode, update, create],
   );
@@ -182,21 +91,21 @@ export default function NodesPage() {
     [modal, t, remove, messageApi],
   );
 
-  const onProbe = useCallback(
-    async (node: NodeRecord) => {
-      const msg = await probe(node.id);
-      if (msg?.success && msg.obj) {
-        if (msg.obj.status === 'online') {
-          // Even if xray is in error/stop on the node we still reached its panel API.
-          messageApi.success(t('pages.nodes.connectionOk', { ms: msg.obj.latencyMs }));
-        } else {
-          messageApi.error(msg.obj.error || t('pages.nodes.toasts.probeFailed'));
-        }
-      }
-      // Refresh the list so the new xrayState / xrayError (if any) appears immediately in the row.
-      refetch();
+  const onNewToken = useCallback(
+    (node: NodeRecord) => {
+      modal.confirm({
+        title: t('pages.nodes.newTokenConfirmTitle', { name: node.name }),
+        content: t('pages.nodes.newTokenConfirmContent'),
+        okText: t('pages.nodes.newToken'),
+        okType: 'danger',
+        cancelText: t('cancel'),
+        onOk: async () => {
+          const msg = await newEnrollToken(node.id);
+          if (msg?.success && msg.obj) setEnroll({ name: node.name ?? '', token: msg.obj.token });
+        },
+      });
     },
-    [probe, t, messageApi, refetch],
+    [modal, t, newEnrollToken],
   );
 
   const onToggleEnable = useCallback(
@@ -205,74 +114,6 @@ export default function NodesPage() {
     },
     [setEnable],
   );
-
-  const devRef = useRef(false);
-
-  const runUpdate = useCallback(
-    async (ids: number[], dev: boolean) => {
-      const msg = await updatePanels(ids, dev);
-      if (!msg?.success) {
-        messageApi.error(msg?.msg || t('somethingWentWrong'));
-        return;
-      }
-      const results = msg.obj ?? [];
-      const ok = results.filter((r) => r.ok).length;
-      const failed = results.length - ok;
-      if (failed === 0) {
-        messageApi.success(t('pages.nodes.toasts.updateStarted'));
-      } else {
-        const firstError = results.find((r) => !r.ok)?.error ?? '';
-        const base = t('pages.nodes.toasts.updateResult', { ok, failed });
-        messageApi.warning(firstError ? `${base} — ${firstError}` : base);
-      }
-      setSelectedIds([]);
-    },
-    [updatePanels, messageApi, t],
-  );
-
-  const onUpdateNode = useCallback(
-    (node: NodeRecord) => {
-      devRef.current = false;
-      modal.confirm({
-        title: t('pages.nodes.updateConfirmTitle', { count: 1 }),
-        content: (
-          <UpdateChannelChoice
-            onChange={(v) => {
-              devRef.current = v;
-            }}
-          />
-        ),
-        okText: t('update'),
-        cancelText: t('cancel'),
-        onOk: () => runUpdate([node.id], devRef.current),
-      });
-    },
-    [modal, t, runUpdate],
-  );
-
-  const onUpdateSelected = useCallback(() => {
-    const eligible = nodes
-      .filter((n) => selectedIds.includes(n.id) && n.enable && n.status === 'online')
-      .map((n) => n.id);
-    if (eligible.length === 0) {
-      messageApi.warning(t('pages.nodes.toasts.updateNoneEligible'));
-      return;
-    }
-    devRef.current = false;
-    modal.confirm({
-      title: t('pages.nodes.updateConfirmTitle', { count: eligible.length }),
-      content: (
-        <UpdateChannelChoice
-          onChange={(v) => {
-            devRef.current = v;
-          }}
-        />
-      ),
-      okText: t('update'),
-      cancelText: t('cancel'),
-      onOk: () => runUpdate(eligible, devRef.current),
-    });
-  }, [modal, t, nodes, selectedIds, runUpdate, messageApi]);
 
   const pageClass = useMemo(() => {
     const classes = ['nodes-page'];
@@ -309,14 +150,14 @@ export default function NodesPage() {
                   <Col span={24}>
                     <Card size="small" hoverable className="summary-card">
                       <Row gutter={[16, isMobile ? 16 : 12]}>
-                        <Col xs={12} sm={12} md={6}>
+                        <Col xs={12} md={6}>
                           <Statistic
                             title={t('pages.nodes.totalNodes')}
                             value={String(totals.total)}
                             prefix={<CloudServerOutlined aria-hidden />}
                           />
                         </Col>
-                        <Col xs={12} sm={12} md={6}>
+                        <Col xs={12} md={6}>
                           <Statistic
                             title={t('pages.nodes.onlineNodes')}
                             value={String(totals.online)}
@@ -328,7 +169,7 @@ export default function NodesPage() {
                             }
                           />
                         </Col>
-                        <Col xs={12} sm={12} md={6}>
+                        <Col xs={12} md={6}>
                           <Statistic
                             title={t('pages.nodes.offlineNodes')}
                             value={String(totals.offline)}
@@ -340,7 +181,7 @@ export default function NodesPage() {
                             }
                           />
                         </Col>
-                        <Col xs={12} sm={12} md={6}>
+                        <Col xs={12} md={6}>
                           <Statistic
                             title={t('pages.nodes.avgLatency')}
                             value={totals.avgLatency > 0 ? `${totals.avgLatency} ms` : '-'}
@@ -354,19 +195,13 @@ export default function NodesPage() {
                   <Col span={24}>
                     <NodeList
                       nodes={nodes}
+                      liveById={liveById}
                       loading={loading}
-                      isMobile={isMobile}
-                      latestVersion={latestVersion}
-                      selectedIds={selectedIds}
-                      onSelectionChange={setSelectedIds}
                       onAdd={onAdd}
-                      onMtls={() => setMtlsOpen(true)}
                       onEdit={onEdit}
                       onDelete={onDelete}
-                      onProbe={onProbe}
+                      onNewToken={onNewToken}
                       onToggleEnable={onToggleEnable}
-                      onUpdateNode={onUpdateNode}
-                      onUpdateSelected={onUpdateSelected}
                     />
                   </Col>
                 </Row>
@@ -379,45 +214,15 @@ export default function NodesPage() {
           open={formOpen}
           mode={formMode}
           node={formNode}
-          testConnection={testConnection}
-          fetchFingerprint={fetchFingerprint}
-          fetchInbounds={fetchInbounds}
           save={onSave}
           onOpenChange={setFormOpen}
         />
-
-        <Modal
-          open={mtlsOpen}
-          title={t('pages.nodes.mtls.title')}
-          footer={null}
-          onCancel={() => setMtlsOpen(false)}
-          destroyOnHidden
-        >
-          <Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>
-            {t('pages.nodes.mtls.intro')}
-          </Typography.Paragraph>
-          <Button onClick={onCopyNodeCa} loading={copyingCa} style={{ marginBottom: 4 }}>
-            {t('pages.nodes.mtls.copyCa')}
-          </Button>
-          <Typography.Paragraph type="secondary">
-            {t('pages.nodes.mtls.copyCaHint')}
-          </Typography.Paragraph>
-          <Typography.Text strong>{t('pages.nodes.mtls.trustLabel')}</Typography.Text>
-          <Input.TextArea
-            aria-label={t('pages.nodes.mtls.trustLabel')}
-            rows={5}
-            value={trustCa}
-            onChange={(e) => setTrustCa(e.target.value)}
-            placeholder={t('pages.nodes.mtls.trustPlaceholder')}
-            style={{ marginTop: 4, fontFamily: 'monospace' }}
-          />
-          <Typography.Paragraph type="secondary" style={{ marginTop: 4 }}>
-            {t('pages.nodes.mtls.trustHint')}
-          </Typography.Paragraph>
-          <Button type="primary" onClick={onSaveTrustCa} loading={savingTrustCa} block>
-            {t('pages.nodes.mtls.save')}
-          </Button>
-        </Modal>
+        <EnrollModal
+          open={enroll !== null}
+          nodeName={enroll?.name ?? ''}
+          token={enroll?.token ?? ''}
+          onClose={() => setEnroll(null)}
+        />
       </Layout>
     </ConfigProvider>
   );

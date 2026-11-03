@@ -5,6 +5,8 @@ go 1.27.3
 require (
 	github.com/amnezia-vpn/amneziawg-go/v3 v3.1.20260828
 	github.com/apernet/quic-go v0.61.1-0.20260806010916-184d081eef3e
+	// The node link contract lives in this repository (see proto/); nodes import the tagged module.
+	github.com/dest1256/d256-panel/proto v0.0.0
 	github.com/gin-contrib/gzip v1.2.8
 	github.com/gin-contrib/sessions v1.1.2
 	github.com/gin-gonic/gin v1.12.0
@@ -119,3 +121,5 @@ require (
 	layeh.com/gopher-luar v1.0.11 // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect
 )
+
+replace github.com/dest1256/d256-panel/proto => ./proto

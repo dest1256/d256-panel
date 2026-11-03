@@ -1439,3 +1439,16 @@ func FriendlyProbeError(msg string) string {
 	}
 	return msg
 }
+
+// UpdateDescriptive edits the fields that do not affect the node link.
+func (s *NodeService) UpdateDescriptive(id int, name, remark, address string) error {
+	res := database.GetDB().Model(&model.Node{}).Where("id = ?", id).
+		Updates(map[string]any{"name": name, "remark": remark, "address": address})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return common.NewError("node not found")
+	}
+	return nil
+}

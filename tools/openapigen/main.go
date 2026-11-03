@@ -122,7 +122,7 @@ func run(root, outDir string) error {
 		},
 		{
 			Path:        resolveRel(root, "internal/web/controller"),
-			StructAllow: setOf("TgBotCapabilities"),
+			StructAllow: setOf("TgBotCapabilities", "NodeLive", "NodeEnrollResponse"),
 		},
 		{
 			Path:        resolveRel(root, "internal/amneziawg"),

@@ -842,6 +842,7 @@ export interface Node {
   depletedCount: number;
   disabledCount: number;
   enable: boolean;
+  enrolledAt: number;
   guid: string;
   id: number;
   inboundCount: number;
@@ -854,12 +855,14 @@ export interface Node {
   name: string;
   netDown: number;
   netUp: number;
+  nodeVersion: string;
   onlineCount: number;
   outboundTag: string;
   panelVersion: string;
   parentGuid?: string;
   pinnedCertSha256: string;
   port: number;
+  protoVersion: number;
   remark: string;
   scheme: string;
   status: string;
@@ -867,6 +870,40 @@ export interface Node {
   transitive?: boolean;
   unavailableMetrics?: string[];
   updatedAt: number;
+  uptimeSecs: number;
+  xrayError: string;
+  xrayState: string;
+  xrayVersion: string;
+}
+
+export interface NodeEnrollResponse {
+  nodeId: number;
+  token: string;
+}
+
+export interface NodeLive {
+  cpuCores: number;
+  cpuMhz: number;
+  cpuPct: number;
+  diskTotal: number;
+  diskUsed: number;
+  journalBytes: number;
+  lastSeen: number;
+  latencyMs: number;
+  memTotal: number;
+  memUsed: number;
+  netDownBps: number;
+  netRecvTotal: number;
+  netSentTotal: number;
+  netUpBps: number;
+  nodeId: number;
+  nodeVersion: string;
+  online: boolean;
+  onlineClients: number;
+  swapTotal: number;
+  swapUsed: number;
+  tcpSockets: number;
+  udpSockets: number;
   uptimeSecs: number;
   xrayError: string;
   xrayState: string;

@@ -1,25 +1,18 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { HttpUtil, Msg } from '@/utils';
-import { parseMsg } from '@/utils/zodValidate';
+import { HttpUtil } from '@/utils';
 import { keys } from '@/api/queryKeys';
-import type { NodeRecord } from '@/api/queries/useNodesQuery';
-import { ProbeResultSchema, type ProbeResult } from '@/schemas/node';
 
-export type { ProbeResult };
-
-export interface NodeUpdateResult {
-  id: number;
-  name?: string;
-  ok: boolean;
-  error?: string;
+export interface NodeFormPayload {
+  name: string;
+  remark: string;
+  address: string;
 }
 
-export interface RemoteInboundOption {
-  tag: string;
-  remark?: string;
-  protocol?: string;
-  port?: number;
+// Returned by create and enrollToken; the token is shown once and never stored in plaintext.
+export interface NodeEnrollment {
+  nodeId: number;
+  token: string;
 }
 
 export function useNodeMutations() {
@@ -28,76 +21,39 @@ export function useNodeMutations() {
     queryClient.invalidateQueries({ queryKey: keys.nodes.root() });
     queryClient.invalidateQueries({ queryKey: keys.inbounds.options() });
   };
+  const onSuccess = (msg: { success?: boolean } | undefined) => {
+    if (msg?.success) invalidate();
+  };
 
   const createMut = useMutation({
-    mutationFn: (payload: Partial<NodeRecord>) => HttpUtil.post('/panel/api/nodes/add', payload),
-    onSuccess: (msg) => {
-      if (msg?.success) invalidate();
-    },
+    mutationFn: (payload: NodeFormPayload) =>
+      HttpUtil.post<NodeEnrollment>('/panel/api/nodes/create', payload),
+    onSuccess,
   });
-
   const updateMut = useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: Partial<NodeRecord> }) =>
+    mutationFn: ({ id, payload }: { id: number; payload: NodeFormPayload }) =>
       HttpUtil.post(`/panel/api/nodes/update/${id}`, payload),
-    onSuccess: (msg) => {
-      if (msg?.success) invalidate();
-    },
+    onSuccess,
   });
-
   const removeMut = useMutation({
     mutationFn: (id: number) => HttpUtil.post(`/panel/api/nodes/del/${id}`),
-    onSuccess: (msg) => {
-      if (msg?.success) invalidate();
-    },
+    onSuccess,
   });
-
   const setEnableMut = useMutation({
     mutationFn: ({ id, enable }: { id: number; enable: boolean }) =>
       HttpUtil.post(`/panel/api/nodes/setEnable/${id}`, { enable }),
-    onSuccess: (msg) => {
-      if (msg?.success) invalidate();
-    },
+    onSuccess,
   });
-
-  const probeMut = useMutation({
-    mutationFn: async (id: number): Promise<Msg<ProbeResult>> => {
-      const raw = await HttpUtil.post(`/panel/api/nodes/probe/${id}`);
-      return parseMsg(raw, ProbeResultSchema, 'nodes/probe');
-    },
-    onSuccess: (msg) => {
-      if (msg?.success) invalidate();
-    },
-  });
-
-  const updatePanelsMut = useMutation({
-    mutationFn: ({ ids, dev }: { ids: number[]; dev: boolean }) =>
-      HttpUtil.post<NodeUpdateResult[]>(
-        '/panel/api/nodes/updatePanel',
-        { ids, dev },
-        {
-          headers: { 'Content-Type': 'application/json' },
-        },
-      ),
-    onSuccess: (msg) => {
-      if (msg?.success) invalidate();
-    },
+  const enrollTokenMut = useMutation({
+    mutationFn: (id: number) => HttpUtil.post<NodeEnrollment>(`/panel/api/nodes/enrollToken/${id}`),
+    onSuccess,
   });
 
   return {
-    create: (payload: Partial<NodeRecord>) => createMut.mutateAsync(payload),
-    update: (id: number, payload: Partial<NodeRecord>) => updateMut.mutateAsync({ id, payload }),
+    create: (payload: NodeFormPayload) => createMut.mutateAsync(payload),
+    update: (id: number, payload: NodeFormPayload) => updateMut.mutateAsync({ id, payload }),
     remove: (id: number) => removeMut.mutateAsync(id),
     setEnable: (id: number, enable: boolean) => setEnableMut.mutateAsync({ id, enable }),
-    probe: (id: number) => probeMut.mutateAsync(id),
-    updatePanels: (ids: number[], dev: boolean): Promise<Msg<NodeUpdateResult[]>> =>
-      updatePanelsMut.mutateAsync({ ids, dev }),
-    testConnection: async (payload: Partial<NodeRecord>): Promise<Msg<ProbeResult>> => {
-      const raw = await HttpUtil.post('/panel/api/nodes/test', payload);
-      return parseMsg(raw, ProbeResultSchema, 'nodes/test');
-    },
-    fetchFingerprint: (payload: Partial<NodeRecord>): Promise<Msg<string>> =>
-      HttpUtil.post<string>('/panel/api/nodes/certFingerprint', payload),
-    fetchInbounds: (payload: Partial<NodeRecord>): Promise<Msg<RemoteInboundOption[]>> =>
-      HttpUtil.post<RemoteInboundOption[]>('/panel/api/nodes/inbounds', payload),
+    newEnrollToken: (id: number) => enrollTokenMut.mutateAsync(id),
   };
 }

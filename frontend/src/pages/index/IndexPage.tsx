@@ -29,6 +29,7 @@ import VitalTile from './VitalTile';
 import ThroughputCard from './ThroughputCard';
 import ConnectionsCard from './ConnectionsCard';
 import SystemStrip from './SystemStrip';
+import NodesOverview from './NodesOverview';
 import { mean, peak, useOverviewHistory } from './useOverviewHistory';
 import type { PanelUpdateInfo } from './PanelUpdateModal';
 const JsonEditor = lazy(() => import('@/components/form/JsonEditor'));
@@ -215,6 +216,8 @@ export default function IndexPage() {
                   />
 
                   <SponsorSlot slot="dashboard" />
+
+                  <NodesOverview />
 
                   {health && (
                     <div className="ov-health" style={{ color: health.color }}>

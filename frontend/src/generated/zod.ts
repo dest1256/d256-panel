@@ -898,6 +898,7 @@ export const NodeSchema = z.object({
   depletedCount: z.number().int(),
   disabledCount: z.number().int(),
   enable: z.boolean(),
+  enrolledAt: z.number().int(),
   guid: z.string(),
   id: z.number().int(),
   inboundCount: z.number().int(),
@@ -910,12 +911,14 @@ export const NodeSchema = z.object({
   name: z.string(),
   netDown: z.number().int(),
   netUp: z.number().int(),
+  nodeVersion: z.string(),
   onlineCount: z.number().int(),
   outboundTag: z.string(),
   panelVersion: z.string(),
   parentGuid: z.string().optional(),
   pinnedCertSha256: z.string(),
   port: z.number().int().min(1).max(65535),
+  protoVersion: z.number().int(),
   remark: z.string(),
   scheme: z.enum(['http', 'https']),
   status: z.string(),
@@ -929,6 +932,42 @@ export const NodeSchema = z.object({
   xrayVersion: z.string(),
 });
 export type Node = z.infer<typeof NodeSchema>;
+
+export const NodeEnrollResponseSchema = z.object({
+  nodeId: z.number().int(),
+  token: z.string(),
+});
+export type NodeEnrollResponse = z.infer<typeof NodeEnrollResponseSchema>;
+
+export const NodeLiveSchema = z.object({
+  cpuCores: z.number().int(),
+  cpuMhz: z.number(),
+  cpuPct: z.number(),
+  diskTotal: z.number().int(),
+  diskUsed: z.number().int(),
+  journalBytes: z.number().int(),
+  lastSeen: z.number().int(),
+  latencyMs: z.number().int(),
+  memTotal: z.number().int(),
+  memUsed: z.number().int(),
+  netDownBps: z.number().int(),
+  netRecvTotal: z.number().int(),
+  netSentTotal: z.number().int(),
+  netUpBps: z.number().int(),
+  nodeId: z.number().int(),
+  nodeVersion: z.string(),
+  online: z.boolean(),
+  onlineClients: z.number().int(),
+  swapTotal: z.number().int(),
+  swapUsed: z.number().int(),
+  tcpSockets: z.number().int(),
+  udpSockets: z.number().int(),
+  uptimeSecs: z.number().int(),
+  xrayError: z.string(),
+  xrayState: z.string(),
+  xrayVersion: z.string(),
+});
+export type NodeLive = z.infer<typeof NodeLiveSchema>;
 
 export const NodeMutationRequestSchema = z.object({
   address: z.string(),

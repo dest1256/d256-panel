@@ -1,23 +1,19 @@
 package controller
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"strconv"
-	"time"
-
-	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/middleware"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/mhsanaei/3x-ui/v3/internal/nodelink"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
 )
 
 type NodeController struct {
 	nodeService service.NodeService
-	xrayService service.XrayService
 }
 
 func NewNodeController(g *gin.RouterGroup) *NodeController {
@@ -29,62 +25,23 @@ func NewNodeController(g *gin.RouterGroup) *NodeController {
 func (a *NodeController) initRouter(g *gin.RouterGroup) {
 	g.GET("/list", a.list)
 	g.GET("/get/:id", a.get)
-	g.GET("/webCert/:id", a.webCert)
+	g.GET("/live", a.live)
+	g.GET("/history/:id/:metric/:bucket", a.history)
 
-	g.POST("/add", a.add)
+	g.POST("/create", a.create)
 	g.POST("/update/:id", a.update)
+	g.POST("/enrollToken/:id", a.enrollToken)
 	g.POST("/del/:id", a.del)
 	g.POST("/setEnable/:id", a.setEnable)
-
-	g.POST("/test", a.test)
-	g.POST("/certFingerprint", a.certFingerprint)
-	g.POST("/inbounds", a.inbounds)
-	g.POST("/probe/:id", a.probe)
-	g.POST("/updatePanel", a.updatePanel)
-	g.GET("/history/:id/:metric/:bucket", a.history)
-	g.POST("/mtls/ca", a.mtlsCa)
-	g.POST("/mtls/trustCA", a.setMtlsTrustCA)
-	g.POST("/mtls/reloadClient", a.reloadMtlsClient)
 }
 
-// reloadMtlsClient validates the credential currently stored by the master and
-// closes cached mTLS pools so subsequent node requests present the new leaf.
-func (a *NodeController) reloadMtlsClient(c *gin.Context) {
-	if err := a.nodeService.ReloadMasterMtlsClient(); err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.reloadMtls"), err)
-		return
+func nodeID(c *gin.Context) (int, bool) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id <= 0 {
+		jsonMsg(c, I18nWeb(c, "get"), fmt.Errorf("invalid node id"))
+		return 0, false
 	}
-	jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.reloadMtls"), nil)
-}
-
-// mtlsCa returns this panel's node-auth CA certificate (public) to paste into a
-// node's mTLS trust setting. It lazily mints the CA + master client cert on
-// first call.
-func (a *NodeController) mtlsCa(c *gin.Context) {
-	caCert, err := a.nodeService.NodeMtlsCaCert()
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.obtain"), err)
-		return
-	}
-	jsonObj(c, gin.H{"caCert": caCert}, nil)
-}
-
-// setMtlsTrustCA stores the CA this panel trusts for incoming node-API client
-// certificates (this panel acting as a node). An empty value disables it.
-// Applied on the next panel restart.
-func (a *NodeController) setMtlsTrustCA(c *gin.Context) {
-	var req struct {
-		CaCert string `json:"caCert" form:"caCert"`
-	}
-	if err := c.ShouldBind(&req); err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.saveMtls"), err)
-		return
-	}
-	if err := a.nodeService.SetNodeMtlsTrustCA(req.CaCert); err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.saveMtls"), err)
-		return
-	}
-	jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.saveMtls"), nil)
+	return id, true
 }
 
 func (a *NodeController) list(c *gin.Context) {
@@ -97,9 +54,8 @@ func (a *NodeController) list(c *gin.Context) {
 }
 
 func (a *NodeController) get(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "get"), err)
+	id, ok := nodeID(c)
+	if !ok {
 		return
 	}
 	n, err := a.nodeService.GetViewById(id)
@@ -110,117 +66,96 @@ func (a *NodeController) get(c *gin.Context) {
 	jsonObj(c, n, nil)
 }
 
-// webCert returns the node's own web TLS certificate/key file paths so the
-// inbound form's "Set Cert from Panel" can fill paths that exist on the node.
-func (a *NodeController) webCert(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "get"), err)
-		return
-	}
-	files, err := a.nodeService.GetWebCertFiles(id)
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.obtain"), err)
-		return
-	}
-	jsonObj(c, files, nil)
+type nodeCreateRequest struct {
+	Name    string `json:"name" form:"name"`
+	Remark  string `json:"remark" form:"remark"`
+	Address string `json:"address" form:"address"`
 }
 
-func (a *NodeController) ensureReachable(c *gin.Context, n *service.NodeMutationRequest, id int) error {
-	runtimeNode, err := a.nodeService.RuntimeNodeFromRequest(id, n)
-	if err != nil {
-		return err
-	}
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 6*time.Second)
-	defer cancel()
-	if _, err := a.nodeService.Probe(ctx, runtimeNode); err != nil {
-		return errors.New(service.FriendlyProbeError(err.Error()))
-	}
-	return nil
+type NodeEnrollResponse struct {
+	NodeID int    `json:"nodeId" example:"1"`
+	Token  string `json:"token" example:"1.k3b1..."`
 }
 
-func (a *NodeController) add(c *gin.Context) {
-	n, ok := middleware.BindAndValidate[service.NodeMutationRequest](c)
-	if !ok {
+// create registers a pending node and returns its one-time enrollment token (shown once).
+func (a *NodeController) create(c *gin.Context) {
+	svc, _ := nodelink.Default()
+	if svc == nil {
+		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.add"), fmt.Errorf("node link is not running"))
 		return
 	}
-	if n.OutboundTag == "" {
-		if err := a.ensureReachable(c, n, 0); err != nil {
-			jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.add"), err)
-			return
-		}
+	var req nodeCreateRequest
+	if err := c.ShouldBind(&req); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.add"), err)
+		return
 	}
-	view, err := a.nodeService.CreateFromRequest(n)
+	n, token, err := svc.CreateNode(req.Name, req.Remark, req.Address)
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.add"), err)
 		return
 	}
-	if n.OutboundTag != "" {
-		if err := a.xrayService.RestartXray(false); err != nil {
-			logger.Warning("apply node outbound bridge failed:", err)
-		}
-		if err := a.ensureReachable(c, n, view.Id); err != nil {
-			jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.add"), err)
-			return
-		}
-	}
-	jsonMsgObj(c, I18nWeb(c, "pages.nodes.toasts.add"), view, nil)
+	jsonMsgObj(c, I18nWeb(c, "pages.nodes.toasts.add"), NodeEnrollResponse{NodeID: n.Id, Token: token}, nil)
 }
 
+// update edits the descriptive fields; the node link itself is configured by enrollment only.
 func (a *NodeController) update(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "get"), err)
-		return
-	}
-	n, ok := middleware.BindAndValidate[service.NodeMutationRequest](c)
+	id, ok := nodeID(c)
 	if !ok {
 		return
 	}
-	old, err := a.nodeService.GetById(id)
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.obtain"), err)
-		return
-	}
-	if n.OutboundTag == "" && old.OutboundTag == "" && (!n.ClearApiToken || n.Enable) {
-		if err := a.ensureReachable(c, n, id); err != nil {
-			jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.update"), err)
-			return
-		}
-	}
-	if err := a.nodeService.UpdateFromRequest(id, n); err != nil {
+	var req nodeCreateRequest
+	if err := c.ShouldBind(&req); err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.update"), err)
 		return
 	}
-	if n.OutboundTag != old.OutboundTag {
-		if err := a.xrayService.RestartXray(false); err != nil {
-			logger.Warning("apply node outbound bridge change failed:", err)
-		}
-		if err := a.ensureReachable(c, n, id); err != nil {
-			jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.update"), err)
-			return
-		}
+	req.Name, req.Address = strings.TrimSpace(req.Name), strings.TrimSpace(req.Address)
+	if req.Name == "" || len(req.Name) > 64 || len(req.Remark) > 256 || !nodelink.ValidAddress(req.Address) {
+		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.update"), fmt.Errorf("invalid node fields"))
+		return
 	}
-	jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.update"), nil)
+	err := a.nodeService.UpdateDescriptive(id, req.Name, req.Remark, req.Address)
+	jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.update"), err)
+}
+
+// enrollToken revokes the node's certificate and issues a new one-time token (re-enrollment).
+func (a *NodeController) enrollToken(c *gin.Context) {
+	id, ok := nodeID(c)
+	if !ok {
+		return
+	}
+	svc, srv := nodelink.Default()
+	if svc == nil {
+		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.update"), fmt.Errorf("node link is not running"))
+		return
+	}
+	token, err := svc.RenewEnrollment(id)
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.update"), err)
+		return
+	}
+	srv.Hub().Disconnect(id)
+	jsonMsgObj(c, I18nWeb(c, "pages.nodes.toasts.update"), NodeEnrollResponse{NodeID: id, Token: token}, nil)
 }
 
 func (a *NodeController) del(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "get"), err)
+	id, ok := nodeID(c)
+	if !ok {
 		return
 	}
 	if err := a.nodeService.Delete(id); err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.delete"), err)
 		return
 	}
+	if svc, srv := nodelink.Default(); svc != nil {
+		svc.DeleteEnrollments(id)
+		srv.Hub().Forget(id)
+	}
 	jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.delete"), nil)
 }
 
 func (a *NodeController) setEnable(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "get"), err)
+	id, ok := nodeID(c)
+	if !ok {
 		return
 	}
 	body := struct {
@@ -230,129 +165,81 @@ func (a *NodeController) setEnable(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.update"), err)
 		return
 	}
-	n, err := a.nodeService.GetById(id)
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.obtain"), err)
-		return
-	}
 	if err := a.nodeService.SetEnable(id, body.Enable); err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.update"), err)
 		return
 	}
-	if n.OutboundTag != "" {
-		if err := a.xrayService.RestartXray(false); err != nil {
-			logger.Warning("apply node enable change failed:", err)
+	if !body.Enable {
+		if _, srv := nodelink.Default(); srv != nil {
+			srv.Hub().Disconnect(id)
 		}
 	}
 	jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.update"), nil)
 }
 
-func (a *NodeController) inbounds(c *gin.Context) {
-	n, ok := middleware.BindAndValidate[service.NodeMutationRequest](c)
-	if !ok {
-		return
-	}
-	runtimeNode, err := a.nodeService.RuntimeNodeFromRequest(n.Id, n)
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.obtain"), err)
-		return
-	}
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
-	defer cancel()
-	options, err := a.nodeService.GetRemoteInboundOptions(ctx, runtimeNode)
-	jsonObj(c, options, err)
+// NodeLive is the live state of one node as last reported over the link.
+type NodeLive struct {
+	NodeID        int     `json:"nodeId" example:"1"`
+	Online        bool    `json:"online" example:"true"`
+	LatencyMs     uint32  `json:"latencyMs" example:"42"`
+	LastSeen      int64   `json:"lastSeen" example:"1700000000"`
+	NodeVersion   string  `json:"nodeVersion" example:"v0.1.0"`
+	XrayVersion   string  `json:"xrayVersion" example:"26.3.27"`
+	XrayState     string  `json:"xrayState" example:"not_configured"`
+	XrayError     string  `json:"xrayError"`
+	CPUPct        float64 `json:"cpuPct" example:"12.5"`
+	CPUCores      uint32  `json:"cpuCores" example:"4"`
+	CPUMhz        float64 `json:"cpuMhz" example:"2400"`
+	MemTotal      uint64  `json:"memTotal"`
+	MemUsed       uint64  `json:"memUsed"`
+	SwapTotal     uint64  `json:"swapTotal"`
+	SwapUsed      uint64  `json:"swapUsed"`
+	DiskTotal     uint64  `json:"diskTotal"`
+	DiskUsed      uint64  `json:"diskUsed"`
+	NetUpBps      uint64  `json:"netUpBps"`
+	NetDownBps    uint64  `json:"netDownBps"`
+	NetSentTotal  uint64  `json:"netSentTotal"`
+	NetRecvTotal  uint64  `json:"netRecvTotal"`
+	TCPSockets    uint32  `json:"tcpSockets"`
+	UDPSockets    uint32  `json:"udpSockets"`
+	UptimeSecs    uint64  `json:"uptimeSecs"`
+	JournalBytes  uint64  `json:"journalBytes"`
+	OnlineClients uint32  `json:"onlineClients"`
 }
 
-func (a *NodeController) test(c *gin.Context) {
-	n, ok := middleware.BindAndValidate[service.NodeMutationRequest](c)
-	if !ok {
-		return
+// live returns the latest metrics of every node that has connected since the panel started.
+func (a *NodeController) live(c *gin.Context) {
+	out := []NodeLive{}
+	if _, srv := nodelink.Default(); srv != nil {
+		for _, sn := range srv.Hub().Snapshots() {
+			l := NodeLive{
+				NodeID: sn.NodeID, Online: sn.Online, LatencyMs: sn.LatencyMs, LastSeen: sn.LastSeen.Unix(),
+				NodeVersion: sn.NodeVersion, XrayVersion: sn.XrayVersion,
+			}
+			if x := sn.Xray; x != nil {
+				l.XrayState, l.XrayError = x.State, x.Error
+				if x.Version != "" {
+					l.XrayVersion = x.Version
+				}
+			}
+			if m := sn.Metrics; m != nil {
+				l.CPUPct, l.CPUCores, l.CPUMhz = m.CpuPct, m.CpuCores, m.CpuMhz
+				l.MemTotal, l.MemUsed, l.SwapTotal, l.SwapUsed = m.MemTotal, m.MemUsed, m.SwapTotal, m.SwapUsed
+				l.DiskTotal, l.DiskUsed = m.DiskTotal, m.DiskUsed
+				l.NetUpBps, l.NetDownBps, l.NetSentTotal, l.NetRecvTotal = m.NetUpBps, m.NetDownBps, m.NetSentTotal, m.NetRecvTotal
+				l.TCPSockets, l.UDPSockets, l.UptimeSecs = m.TcpSockets, m.UdpSockets, m.UptimeSecs
+				l.JournalBytes, l.OnlineClients = m.JournalBytes, m.OnlineClients
+			}
+			out = append(out, l)
+		}
 	}
-	runtimeNode, err := a.nodeService.RuntimeNodeFromRequest(n.Id, n)
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.test"), err)
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 6*time.Second)
-	defer cancel()
-	var patch service.HeartbeatPatch
-	if runtimeNode.OutboundTag != "" {
-		patch, err = a.nodeService.ProbeWithOutbound(ctx, runtimeNode, runtimeNode.OutboundTag)
-	} else {
-		patch, err = a.nodeService.Probe(ctx, runtimeNode)
-	}
-	jsonObj(c, patch.ToUI(err == nil), nil)
-}
-
-func (a *NodeController) certFingerprint(c *gin.Context) {
-	n, ok := middleware.BindAndValidate[service.NodeMutationRequest](c)
-	if !ok {
-		return
-	}
-	runtimeNode, err := a.nodeService.NodeFromRequestForCertificate(n)
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.test"), err)
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 6*time.Second)
-	defer cancel()
-	fp, err := a.nodeService.FetchCertFingerprint(ctx, runtimeNode)
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.test"), err)
-		return
-	}
-	jsonObj(c, fp, nil)
-}
-
-func (a *NodeController) probe(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "get"), err)
-		return
-	}
-	n, err := a.nodeService.GetById(id)
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.obtain"), err)
-		return
-	}
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 6*time.Second)
-	defer cancel()
-	patch, probeErr := a.nodeService.Probe(ctx, n)
-	if probeErr != nil {
-		patch.Status = "offline"
-	} else {
-		patch.Status = "online"
-	}
-	if err := a.nodeService.UpdateHeartbeat(id, patch); err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.test"), err)
-		return
-	}
-	jsonObj(c, patch.ToUI(probeErr == nil), nil)
-}
-
-func (a *NodeController) updatePanel(c *gin.Context) {
-	var req struct {
-		Ids []int `json:"ids"`
-		Dev bool  `json:"dev"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
-		return
-	}
-	if len(req.Ids) == 0 {
-		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), fmt.Errorf("no nodes selected"))
-		return
-	}
-	results, err := a.nodeService.UpdatePanels(req.Ids, req.Dev)
-	jsonMsgObj(c, I18nWeb(c, "pages.nodes.toasts.updateStarted"), results, err)
+	slices.SortFunc(out, func(x, y NodeLive) int { return x.NodeID - y.NodeID })
+	jsonObj(c, out, nil)
 }
 
 func (a *NodeController) history(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "get"), err)
+	id, ok := nodeID(c)
+	if !ok {
 		return
 	}
 	metric := c.Param("metric")

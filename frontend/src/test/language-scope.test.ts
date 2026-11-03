@@ -27,9 +27,9 @@ describe('subscription language scope', () => {
     await readyI18n('subscription');
     expect(cookies.get('subLang')).toBe('en-US');
 
-    utils.LanguageManager.setLanguage('fa-IR', 'subscription');
+    utils.LanguageManager.setLanguage('ru-RU', 'subscription');
     expect(cookies.get('lang')).toBe('en-US');
-    expect(cookies.get('subLang')).toBe('fa-IR');
+    expect(cookies.get('subLang')).toBe('ru-RU');
     expect(reload).toHaveBeenCalledOnce();
 
     const dateTimeFormat = vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(function (
@@ -37,11 +37,11 @@ describe('subscription language scope', () => {
     ) {
       return { format: () => String(locale) } as Intl.DateTimeFormat;
     } as typeof Intl.DateTimeFormat);
-    expect(utils.IntlUtil.formatDate(0, 'gregorian', 'fa-IR')).toBe('fa-IR');
-    expect(dateTimeFormat).toHaveBeenLastCalledWith('fa-IR', expect.any(Object));
+    expect(utils.IntlUtil.formatDate(0, 'gregorian', 'ru-RU')).toBe('ru-RU');
+    expect(dateTimeFormat).toHaveBeenLastCalledWith('ru-RU', expect.any(Object));
   });
 
-  it('maps a Slovak browser to the Slovak panel locale instead of resetting to English', async () => {
+  it('maps a Russian browser to the Russian panel locale instead of resetting to English', async () => {
     vi.resetModules();
     const utils = await import('@/utils');
     const cookies = new Map<string, string>();
@@ -52,10 +52,10 @@ describe('subscription language scope', () => {
       cookies.set(name, value);
     });
     const reload = vi.fn();
-    vi.stubGlobal('window', { navigator: { language: 'sk' }, location: { reload } });
+    vi.stubGlobal('window', { navigator: { language: 'ru' }, location: { reload } });
 
-    expect(utils.LanguageManager.getLanguage()).toBe('sk-SK');
-    expect(cookies.get('lang')).toBe('sk-SK');
+    expect(utils.LanguageManager.getLanguage()).toBe('ru-RU');
+    expect(cookies.get('lang')).toBe('ru-RU');
     expect(reload).not.toHaveBeenCalled();
   });
 

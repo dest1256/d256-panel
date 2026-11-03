@@ -23,6 +23,7 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/eventbus"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 	"github.com/mhsanaei/3x-ui/v3/internal/mtproto"
+	"github.com/mhsanaei/3x-ui/v3/internal/nodelink"
 	"github.com/mhsanaei/3x-ui/v3/internal/tuic"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/cronspec"
@@ -130,6 +131,9 @@ type Server struct {
 	discordGateway *discord.GatewayClient
 
 	wsHub *websocket.Hub
+
+	linkSvc *nodelink.Service
+	linkSrv *nodelink.Server
 
 	bus                  *eventbus.Bus
 	cron                 *cron.Cron
@@ -261,6 +265,8 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	g.GET("/pwa-register.js", controller.ServePWARegister)
 	g.GET("/service-worker.js", controller.ServePWAServiceWorker)
 	g.GET("/icons/:name", controller.ServePWAIcon)
+	// Node enrollment authenticates with its one-time token, so it sits outside sessions and CSRF.
+	g.POST("/d256/enroll", s.linkSvc.HandleEnroll(config.GetNodeLinkPort()))
 
 	s.index = controller.NewIndexController(g)
 	s.panel = controller.NewXUIController(g)
@@ -359,9 +365,7 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 	// check client ips from log file every 10 sec
 	_, _ = s.cron.AddJob(cadenceClientIPScan, job.NewCheckClientIpJob())
 
-	_, _ = s.cron.AddJob(cadenceNodeHeartbeat, job.NewNodeHeartbeatJob())
-
-	_, _ = s.cron.AddJob(cadenceNodeTraffic, job.NewNodeTrafficSyncJob())
+	// Node liveness and metrics arrive over the node link (internal/nodelink), not by polling.
 
 	// Outbound subscription auto-refresh (respects per-sub updateInterval)
 	_, _ = s.cron.AddJob(cadenceOutboundSub, job.NewOutboundSubscriptionJob())
@@ -572,8 +576,21 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 		return tls.X509KeyPair(ck.CertPEM, ck.KeyPEM)
 	})
 
+	s.linkSvc = &nodelink.Service{WebDomain: func() string {
+		d, _ := s.settingService.GetWebDomain()
+		return d
+	}}
+	if err := s.linkSvc.Init(); err != nil {
+		return err
+	}
+	s.linkSrv = nodelink.NewServer(s.linkSvc)
+	nodelink.SetDefault(s.linkSvc, s.linkSrv)
+
 	engine, err := s.initRouter()
 	if err != nil {
+		return err
+	}
+	if err := s.linkSrv.Start(":" + strconv.Itoa(config.GetNodeLinkPort())); err != nil {
 		return err
 	}
 
@@ -786,6 +803,9 @@ func (s *Server) StopPanelOnly() error {
 
 func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 	s.cancel()
+	if s.linkSrv != nil {
+		s.linkSrv.Stop()
+	}
 	var err1 error
 	var err2 error
 	if s.httpServer != nil {

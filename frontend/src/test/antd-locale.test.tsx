@@ -9,7 +9,7 @@ describe('AntdRootConfig locale', () => {
   });
 
   it.each([
-    ['fa-IR', 'داده‌ای موجود نیست'],
+    ['ru-RU', 'Нет данных'],
     ['en-US', 'No data'],
   ])('renders antd built-in text in the %s panel language', async (locale, emptyText) => {
     vi.resetModules();

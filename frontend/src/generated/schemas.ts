@@ -3644,6 +3644,10 @@ export const SCHEMAS: Record<string, unknown> = {
         "example": true,
         "type": "boolean"
       },
+      "enrolledAt": {
+        "format": "int64",
+        "type": "integer"
+      },
       "guid": {
         "description": "Guid is the remote panel's stable self-identifier (its panelGuid),\nlearned from each heartbeat. It is the globally stable node identity used\nto attribute online clients/inbounds to the physical node across a chain\nof nodes (#4983); panel-local autoincrement ids don't survive a hop.\nObserved-state only — never user-edited.",
         "type": "string"
@@ -3700,6 +3704,9 @@ export const SCHEMAS: Record<string, unknown> = {
         "format": "int64",
         "type": "integer"
       },
+      "nodeVersion": {
+        "type": "string"
+      },
       "onlineCount": {
         "example": 3,
         "type": "integer"
@@ -3722,6 +3729,9 @@ export const SCHEMAS: Record<string, unknown> = {
         "example": 2053,
         "maximum": 65535,
         "minimum": 1,
+        "type": "integer"
+      },
+      "protoVersion": {
         "type": "integer"
       },
       "remark": {
@@ -3794,6 +3804,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "depletedCount",
       "disabledCount",
       "enable",
+      "enrolledAt",
       "guid",
       "id",
       "inboundCount",
@@ -3806,16 +3817,170 @@ export const SCHEMAS: Record<string, unknown> = {
       "name",
       "netDown",
       "netUp",
+      "nodeVersion",
       "onlineCount",
       "outboundTag",
       "panelVersion",
       "pinnedCertSha256",
       "port",
+      "protoVersion",
       "remark",
       "scheme",
       "status",
       "tlsVerifyMode",
       "updatedAt",
+      "uptimeSecs",
+      "xrayError",
+      "xrayState",
+      "xrayVersion"
+    ],
+    "type": "object"
+  },
+  "NodeEnrollResponse": {
+    "properties": {
+      "nodeId": {
+        "example": 1,
+        "type": "integer"
+      },
+      "token": {
+        "example": "1.k3b1...",
+        "type": "string"
+      }
+    },
+    "required": [
+      "nodeId",
+      "token"
+    ],
+    "type": "object"
+  },
+  "NodeLive": {
+    "description": "NodeLive is the live state of one node as last reported over the link.",
+    "properties": {
+      "cpuCores": {
+        "example": 4,
+        "type": "integer"
+      },
+      "cpuMhz": {
+        "example": 2400,
+        "type": "number"
+      },
+      "cpuPct": {
+        "example": 12.5,
+        "type": "number"
+      },
+      "diskTotal": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "diskUsed": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "journalBytes": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "lastSeen": {
+        "example": 1700000000,
+        "format": "int64",
+        "type": "integer"
+      },
+      "latencyMs": {
+        "example": 42,
+        "type": "integer"
+      },
+      "memTotal": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "memUsed": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "netDownBps": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "netRecvTotal": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "netSentTotal": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "netUpBps": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "nodeId": {
+        "example": 1,
+        "type": "integer"
+      },
+      "nodeVersion": {
+        "example": "v0.1.0",
+        "type": "string"
+      },
+      "online": {
+        "example": true,
+        "type": "boolean"
+      },
+      "onlineClients": {
+        "type": "integer"
+      },
+      "swapTotal": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "swapUsed": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "tcpSockets": {
+        "type": "integer"
+      },
+      "udpSockets": {
+        "type": "integer"
+      },
+      "uptimeSecs": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "xrayError": {
+        "type": "string"
+      },
+      "xrayState": {
+        "example": "not_configured",
+        "type": "string"
+      },
+      "xrayVersion": {
+        "example": "26.3.27",
+        "type": "string"
+      }
+    },
+    "required": [
+      "cpuCores",
+      "cpuMhz",
+      "cpuPct",
+      "diskTotal",
+      "diskUsed",
+      "journalBytes",
+      "lastSeen",
+      "latencyMs",
+      "memTotal",
+      "memUsed",
+      "netDownBps",
+      "netRecvTotal",
+      "netSentTotal",
+      "netUpBps",
+      "nodeId",
+      "nodeVersion",
+      "online",
+      "onlineClients",
+      "swapTotal",
+      "swapUsed",
+      "tcpSockets",
+      "udpSockets",
       "uptimeSecs",
       "xrayError",
       "xrayState",

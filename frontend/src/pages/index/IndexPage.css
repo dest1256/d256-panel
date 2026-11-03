@@ -485,3 +485,11 @@
 .index-page .ip-hidden {
   filter: blur(6px);
 }
+
+.ov-nodes {
+  margin-bottom: 16px;
+}
+
+.ov-node-meter {
+  margin-bottom: 4px;
+}

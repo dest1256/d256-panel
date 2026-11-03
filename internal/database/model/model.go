@@ -846,6 +846,12 @@ type Node struct {
 	InboundTags         []string `json:"inboundTags" form:"inboundTags" gorm:"serializer:json;column:inbound_tags"`
 	OutboundTag         string   `json:"outboundTag" form:"outboundTag" gorm:"column:outbound_tag"`
 
+	// d256 node link: set when the node enrolls (CertSerial is the only certificate the link accepts).
+	CertSerial   string `json:"-" gorm:"column:cert_serial;index"`
+	EnrolledAt   int64  `json:"enrolledAt" gorm:"column:enrolled_at"`
+	ProtoVersion int    `json:"protoVersion" gorm:"column:proto_version"`
+	NodeVersion  string `json:"nodeVersion" gorm:"column:node_version"`
+
 	// Guid is the remote panel's stable self-identifier (its panelGuid),
 	// learned from each heartbeat. It is the globally stable node identity used
 	// to attribute online clients/inbounds to the physical node across a chain
