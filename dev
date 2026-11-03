@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Run any command inside the dev container: ./dev make test | ./dev bash
+set -euo pipefail
+cd "$(dirname "$0")"
+export MSYS_NO_PATHCONV=1
+IMG=d256-panel-dev
+docker image inspect "$IMG" >/dev/null 2>&1 || docker build -t "$IMG" .devcontainer
+exec docker run --rm ${D256_TTY:+-it} \
+  -v "$PWD:/workspace" \
+  -v d256-cache:/cache \
+  -v d256-panel-node-modules:/workspace/frontend/node_modules \
+  -w /workspace "$IMG" "${@:-bash}"

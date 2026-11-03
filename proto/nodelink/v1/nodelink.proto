@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package d256.nodelink.v1;
+
+option go_package = "github.com/dest1256/d256-panel/proto/nodelink/v1;nodelinkv1";
+
+// ProtocolVersion is bumped on every wire-incompatible change. Additive changes keep it.
+// The panel advertises the minimum it accepts in HelloAck.
+enum ProtocolVersion {
+  PROTOCOL_VERSION_UNSPECIFIED = 0;
+  PROTOCOL_VERSION_1 = 1;
+}
+
+// NodeLink is served by the panel over mTLS. The node always dials out.
+service NodeLink {
+  rpc Connect(stream NodeToPanel) returns (stream PanelToNode);
+}
+
+message NodeToPanel {
+  oneof msg {
+    Hello hello = 1;
+    Heartbeat heartbeat = 2;
+  }
+}
+
+message PanelToNode {
+  oneof msg {
+    HelloAck hello_ack = 1;
+    Heartbeat heartbeat = 2;
+  }
+}
+
+message Hello {
+  uint32 protocol_version = 1;
+  string node_version = 2;
+  string xray_version = 3;
+  string os = 4;
+  string arch = 5;
+}
+
+message HelloAck {
+  bool accepted = 1;
+  uint32 min_protocol_version = 2;
+  string reason = 3;
+}
+
+message Heartbeat {
+  int64 unix_nanos = 1;
+}

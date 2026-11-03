@@ -1,0 +1,30 @@
+# Panel + Caddy (automatic TLS). Copy .env.example to .env and set PANEL_DOMAIN.
+services:
+  panel:
+    build: .
+    image: d256-panel:local
+    restart: unless-stopped
+    volumes:
+      - panel-data:/data
+    ports:
+      # Node gRPC (mTLS) is served by the panel itself, not by Caddy.
+      - "8444:8444"
+    expose:
+      - "2053"
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [panel]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      PANEL_DOMAIN: ${PANEL_DOMAIN:?set PANEL_DOMAIN in .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+volumes:
+  panel-data:
+  caddy-data:
+  caddy-config:

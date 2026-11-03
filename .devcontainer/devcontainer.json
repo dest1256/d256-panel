@@ -1,0 +1,11 @@
+{
+  "name": "d256-panel",
+  "build": { "dockerfile": "Dockerfile", "context": "." },
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "mounts": [
+    "source=d256-cache,target=/cache,type=volume",
+    "source=d256-panel-node-modules,target=/workspace/frontend/node_modules,type=volume"
+  ],
+  "customizations": { "vscode": { "extensions": ["golang.go", "dbaeumer.vscode-eslint", "oxc.oxc-vscode"] } }
+}

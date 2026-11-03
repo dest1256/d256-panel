@@ -1,0 +1,4 @@
+{$PANEL_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy panel:2053
+}
