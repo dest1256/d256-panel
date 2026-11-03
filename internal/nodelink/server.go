@@ -336,6 +336,9 @@ func (s *Server) Connect(stream pb.NodeLink_ConnectServer) error {
 	if err := s.syncDesired(stream, node.Id, st, true); err != nil {
 		return err
 	}
+	if err := s.syncLimits(stream, node.Id, st, true); err != nil {
+		return err
+	}
 	push := time.NewTicker(pushEvery)
 	defer push.Stop()
 	idle := time.NewTimer(idleTimeout)
@@ -360,6 +363,9 @@ func (s *Server) Connect(stream pb.NodeLink_ConnectServer) error {
 			}
 		case <-push.C:
 			if err := s.syncDesired(stream, node.Id, st, false); err != nil {
+				return err
+			}
+			if err := s.syncLimits(stream, node.Id, st, false); err != nil {
 				return err
 			}
 		case <-idle.C:

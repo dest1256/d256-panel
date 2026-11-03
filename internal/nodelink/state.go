@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -31,6 +32,7 @@ var errStaleJournal = errors.New("traffic batch does not follow the acknowledged
 
 type sessState struct {
 	lastSentVersion uint64
+	lastLimits      time.Time
 	// sent keeps the configs not acknowledged yet; acked is what the node is known to run, the base
 	// for planning a restart-free update.
 	sent         map[uint64][]byte
@@ -220,4 +222,56 @@ func (s *Server) handleTraffic(stream pb.NodeLink_ConnectServer, nodeID int, b *
 		return nil
 	}
 	return sendAck(b.ToSeq)
+}
+
+// limitsEvery is how often the node gets a fresh snapshot of its clients' limits.
+const limitsEvery = 60 * time.Second
+
+// buildLimits snapshots quota, usage and expiry of the clients hosted on a node. The node uses it
+// to keep enforcing limits while the panel is unreachable; the panel stays authoritative.
+func buildLimits(nodeID int) (*pb.LimitsSnapshot, error) {
+	emails, _, err := allowedNames(nodeID)
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(emails))
+	for e := range emails {
+		names = append(names, e)
+	}
+	snap := &pb.LimitsSnapshot{TakenUnix: time.Now().Unix()}
+	const chunk = 400
+	for i := 0; i < len(names); i += chunk {
+		var rows []xray.ClientTraffic
+		if err := database.GetDB().Where("email IN ?", names[i:min(i+chunk, len(names))]).Find(&rows).Error; err != nil {
+			return nil, err
+		}
+		for _, r := range rows {
+			l := &pb.ClientLimit{Email: r.Email}
+			if r.Total > 0 {
+				l.QuotaBytes = uint64(r.Total)
+			}
+			if used := r.Up + r.Down; used > 0 {
+				l.UsedBytes = uint64(used)
+			}
+			if r.ExpiryTime > 0 {
+				l.ExpiryUnix = r.ExpiryTime / 1000
+			}
+			snap.Clients = append(snap.Clients, l)
+		}
+	}
+	return snap, nil
+}
+
+// syncLimits sends the limits snapshot on connect (force) and then once per limitsEvery.
+func (s *Server) syncLimits(stream pb.NodeLink_ConnectServer, nodeID int, st *sessState, force bool) error {
+	if !force && time.Since(st.lastLimits) < limitsEvery {
+		return nil
+	}
+	snap, err := buildLimits(nodeID)
+	if err != nil {
+		logger.Warningf("node %d: building limits failed: %v", nodeID, err)
+		return nil
+	}
+	st.lastLimits = time.Now()
+	return stream.Send(&pb.PanelToNode{Msg: &pb.PanelToNode_Limits{Limits: snap}})
 }

@@ -7,12 +7,11 @@
 package nodelinkv1
 
 import (
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
-
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -224,6 +223,7 @@ type PanelToNode struct {
 	//	*PanelToNode_Heartbeat
 	//	*PanelToNode_DesiredState
 	//	*PanelToNode_JournalAck
+	//	*PanelToNode_Limits
 	Msg           isPanelToNode_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -302,6 +302,15 @@ func (x *PanelToNode) GetJournalAck() *JournalAck {
 	return nil
 }
 
+func (x *PanelToNode) GetLimits() *LimitsSnapshot {
+	if x != nil {
+		if x, ok := x.Msg.(*PanelToNode_Limits); ok {
+			return x.Limits
+		}
+	}
+	return nil
+}
+
 type isPanelToNode_Msg interface {
 	isPanelToNode_Msg()
 }
@@ -322,6 +331,10 @@ type PanelToNode_JournalAck struct {
 	JournalAck *JournalAck `protobuf:"bytes,4,opt,name=journal_ack,json=journalAck,proto3,oneof"`
 }
 
+type PanelToNode_Limits struct {
+	Limits *LimitsSnapshot `protobuf:"bytes,5,opt,name=limits,proto3,oneof"`
+}
+
 func (*PanelToNode_HelloAck) isPanelToNode_Msg() {}
 
 func (*PanelToNode_Heartbeat) isPanelToNode_Msg() {}
@@ -329,6 +342,8 @@ func (*PanelToNode_Heartbeat) isPanelToNode_Msg() {}
 func (*PanelToNode_DesiredState) isPanelToNode_Msg() {}
 
 func (*PanelToNode_JournalAck) isPanelToNode_Msg() {}
+
+func (*PanelToNode_Limits) isPanelToNode_Msg() {}
 
 type Hello struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
@@ -1328,10 +1343,13 @@ func (x *TrafficEntry) GetDown() uint64 {
 // only when from_seq == acked_seq+1, in one transaction with the new acked_seq, so retries never
 // count twice.
 type TrafficBatch struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	FromSeq       uint64                 `protobuf:"varint,1,opt,name=from_seq,json=fromSeq,proto3" json:"from_seq,omitempty"`
-	ToSeq         uint64                 `protobuf:"varint,2,opt,name=to_seq,json=toSeq,proto3" json:"to_seq,omitempty"`
-	Entries       []*TrafficEntry        `protobuf:"bytes,3,rep,name=entries,proto3" json:"entries,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	FromSeq uint64                 `protobuf:"varint,1,opt,name=from_seq,json=fromSeq,proto3" json:"from_seq,omitempty"`
+	ToSeq   uint64                 `protobuf:"varint,2,opt,name=to_seq,json=toSeq,proto3" json:"to_seq,omitempty"`
+	Entries []*TrafficEntry        `protobuf:"bytes,3,rep,name=entries,proto3" json:"entries,omitempty"`
+	// Wall-clock span the usage was measured in (unix seconds). Merged ranges cover the union.
+	StartUnix     int64 `protobuf:"varint,4,opt,name=start_unix,json=startUnix,proto3" json:"start_unix,omitempty"`
+	EndUnix       int64 `protobuf:"varint,5,opt,name=end_unix,json=endUnix,proto3" json:"end_unix,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1387,6 +1405,20 @@ func (x *TrafficBatch) GetEntries() []*TrafficEntry {
 	return nil
 }
 
+func (x *TrafficBatch) GetStartUnix() int64 {
+	if x != nil {
+		return x.StartUnix
+	}
+	return 0
+}
+
+func (x *TrafficBatch) GetEndUnix() int64 {
+	if x != nil {
+		return x.EndUnix
+	}
+	return 0
+}
+
 // JournalAck confirms everything up to and including acked_seq. When a batch does not follow the
 // acknowledged position, the panel answers with the current acked_seq so the node resends from there.
 type JournalAck struct {
@@ -1433,6 +1465,132 @@ func (x *JournalAck) GetAckedSeq() uint64 {
 	return 0
 }
 
+// ClientLimit is what the node needs to keep enforcing a client's limits while the panel is unreachable.
+type ClientLimit struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Email string                 `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
+	// Total quota in bytes; 0 means unlimited.
+	QuotaBytes uint64 `protobuf:"varint,2,opt,name=quota_bytes,json=quotaBytes,proto3" json:"quota_bytes,omitempty"`
+	// Bytes the panel had counted for the client when the snapshot was taken.
+	UsedBytes uint64 `protobuf:"varint,3,opt,name=used_bytes,json=usedBytes,proto3" json:"used_bytes,omitempty"`
+	// Absolute expiry in unix seconds; 0 means none.
+	ExpiryUnix    int64 `protobuf:"varint,4,opt,name=expiry_unix,json=expiryUnix,proto3" json:"expiry_unix,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClientLimit) Reset() {
+	*x = ClientLimit{}
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClientLimit) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClientLimit) ProtoMessage() {}
+
+func (x *ClientLimit) ProtoReflect() protoreflect.Message {
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClientLimit.ProtoReflect.Descriptor instead.
+func (*ClientLimit) Descriptor() ([]byte, []int) {
+	return file_nodelink_v1_nodelink_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *ClientLimit) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *ClientLimit) GetQuotaBytes() uint64 {
+	if x != nil {
+		return x.QuotaBytes
+	}
+	return 0
+}
+
+func (x *ClientLimit) GetUsedBytes() uint64 {
+	if x != nil {
+		return x.UsedBytes
+	}
+	return 0
+}
+
+func (x *ClientLimit) GetExpiryUnix() int64 {
+	if x != nil {
+		return x.ExpiryUnix
+	}
+	return 0
+}
+
+// LimitsSnapshot replaces the node's previous snapshot. The panel sends it on connect and then
+// periodically; it is not part of DesiredState because usage changes constantly.
+type LimitsSnapshot struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TakenUnix     int64                  `protobuf:"varint,1,opt,name=taken_unix,json=takenUnix,proto3" json:"taken_unix,omitempty"`
+	Clients       []*ClientLimit         `protobuf:"bytes,2,rep,name=clients,proto3" json:"clients,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LimitsSnapshot) Reset() {
+	*x = LimitsSnapshot{}
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LimitsSnapshot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LimitsSnapshot) ProtoMessage() {}
+
+func (x *LimitsSnapshot) ProtoReflect() protoreflect.Message {
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LimitsSnapshot.ProtoReflect.Descriptor instead.
+func (*LimitsSnapshot) Descriptor() ([]byte, []int) {
+	return file_nodelink_v1_nodelink_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *LimitsSnapshot) GetTakenUnix() int64 {
+	if x != nil {
+		return x.TakenUnix
+	}
+	return 0
+}
+
+func (x *LimitsSnapshot) GetClients() []*ClientLimit {
+	if x != nil {
+		return x.Clients
+	}
+	return nil
+}
+
 var File_nodelink_v1_nodelink_proto protoreflect.FileDescriptor
 
 const file_nodelink_v1_nodelink_proto_rawDesc = "" +
@@ -1446,13 +1604,14 @@ const file_nodelink_v1_nodelink_proto_rawDesc = "" +
 	"xrayStatus\x129\n" +
 	"\tstate_ack\x18\x05 \x01(\v2\x1a.d256.nodelink.v1.StateAckH\x00R\bstateAck\x12:\n" +
 	"\atraffic\x18\x06 \x01(\v2\x1e.d256.nodelink.v1.TrafficBatchH\x00R\atrafficB\x05\n" +
-	"\x03msg\"\x94\x02\n" +
+	"\x03msg\"\xd0\x02\n" +
 	"\vPanelToNode\x129\n" +
 	"\thello_ack\x18\x01 \x01(\v2\x1a.d256.nodelink.v1.HelloAckH\x00R\bhelloAck\x12;\n" +
 	"\theartbeat\x18\x02 \x01(\v2\x1b.d256.nodelink.v1.HeartbeatH\x00R\theartbeat\x12E\n" +
 	"\rdesired_state\x18\x03 \x01(\v2\x1e.d256.nodelink.v1.DesiredStateH\x00R\fdesiredState\x12?\n" +
 	"\vjournal_ack\x18\x04 \x01(\v2\x1c.d256.nodelink.v1.JournalAckH\x00R\n" +
-	"journalAckB\x05\n" +
+	"journalAck\x12:\n" +
+	"\x06limits\x18\x05 \x01(\v2 .d256.nodelink.v1.LimitsSnapshotH\x00R\x06limitsB\x05\n" +
 	"\x03msg\"\xf5\x01\n" +
 	"\x05Hello\x12)\n" +
 	"\x10protocol_version\x18\x01 \x01(\rR\x0fprotocolVersion\x12!\n" +
@@ -1543,14 +1702,29 @@ const file_nodelink_v1_nodelink_proto_rawDesc = "" +
 	"\ainbound\x18\x01 \x01(\bR\ainbound\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x0e\n" +
 	"\x02up\x18\x03 \x01(\x04R\x02up\x12\x12\n" +
-	"\x04down\x18\x04 \x01(\x04R\x04down\"z\n" +
+	"\x04down\x18\x04 \x01(\x04R\x04down\"\xb4\x01\n" +
 	"\fTrafficBatch\x12\x19\n" +
 	"\bfrom_seq\x18\x01 \x01(\x04R\afromSeq\x12\x15\n" +
 	"\x06to_seq\x18\x02 \x01(\x04R\x05toSeq\x128\n" +
-	"\aentries\x18\x03 \x03(\v2\x1e.d256.nodelink.v1.TrafficEntryR\aentries\")\n" +
+	"\aentries\x18\x03 \x03(\v2\x1e.d256.nodelink.v1.TrafficEntryR\aentries\x12\x1d\n" +
+	"\n" +
+	"start_unix\x18\x04 \x01(\x03R\tstartUnix\x12\x19\n" +
+	"\bend_unix\x18\x05 \x01(\x03R\aendUnix\")\n" +
 	"\n" +
 	"JournalAck\x12\x1b\n" +
-	"\tacked_seq\x18\x01 \x01(\x04R\backedSeq*K\n" +
+	"\tacked_seq\x18\x01 \x01(\x04R\backedSeq\"\x84\x01\n" +
+	"\vClientLimit\x12\x14\n" +
+	"\x05email\x18\x01 \x01(\tR\x05email\x12\x1f\n" +
+	"\vquota_bytes\x18\x02 \x01(\x04R\n" +
+	"quotaBytes\x12\x1d\n" +
+	"\n" +
+	"used_bytes\x18\x03 \x01(\x04R\tusedBytes\x12\x1f\n" +
+	"\vexpiry_unix\x18\x04 \x01(\x03R\n" +
+	"expiryUnix\"h\n" +
+	"\x0eLimitsSnapshot\x12\x1d\n" +
+	"\n" +
+	"taken_unix\x18\x01 \x01(\x03R\ttakenUnix\x127\n" +
+	"\aclients\x18\x02 \x03(\v2\x1d.d256.nodelink.v1.ClientLimitR\aclients*K\n" +
 	"\x0fProtocolVersion\x12 \n" +
 	"\x1cPROTOCOL_VERSION_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12PROTOCOL_VERSION_1\x10\x012W\n" +
@@ -1570,26 +1744,28 @@ func file_nodelink_v1_nodelink_proto_rawDescGZIP() []byte {
 }
 
 var file_nodelink_v1_nodelink_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_nodelink_v1_nodelink_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_nodelink_v1_nodelink_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_nodelink_v1_nodelink_proto_goTypes = []any{
-	(ProtocolVersion)(0),  // 0: d256.nodelink.v1.ProtocolVersion
-	(*NodeToPanel)(nil),   // 1: d256.nodelink.v1.NodeToPanel
-	(*PanelToNode)(nil),   // 2: d256.nodelink.v1.PanelToNode
-	(*Hello)(nil),         // 3: d256.nodelink.v1.Hello
-	(*HelloAck)(nil),      // 4: d256.nodelink.v1.HelloAck
-	(*Heartbeat)(nil),     // 5: d256.nodelink.v1.Heartbeat
-	(*SystemMetrics)(nil), // 6: d256.nodelink.v1.SystemMetrics
-	(*XrayStatus)(nil),    // 7: d256.nodelink.v1.XrayStatus
-	(*DesiredState)(nil),  // 8: d256.nodelink.v1.DesiredState
-	(*HotOp)(nil),         // 9: d256.nodelink.v1.HotOp
-	(*RemoveUser)(nil),    // 10: d256.nodelink.v1.RemoveUser
-	(*AddUser)(nil),       // 11: d256.nodelink.v1.AddUser
-	(*RemoveInbound)(nil), // 12: d256.nodelink.v1.RemoveInbound
-	(*AddInbound)(nil),    // 13: d256.nodelink.v1.AddInbound
-	(*StateAck)(nil),      // 14: d256.nodelink.v1.StateAck
-	(*TrafficEntry)(nil),  // 15: d256.nodelink.v1.TrafficEntry
-	(*TrafficBatch)(nil),  // 16: d256.nodelink.v1.TrafficBatch
-	(*JournalAck)(nil),    // 17: d256.nodelink.v1.JournalAck
+	(ProtocolVersion)(0),   // 0: d256.nodelink.v1.ProtocolVersion
+	(*NodeToPanel)(nil),    // 1: d256.nodelink.v1.NodeToPanel
+	(*PanelToNode)(nil),    // 2: d256.nodelink.v1.PanelToNode
+	(*Hello)(nil),          // 3: d256.nodelink.v1.Hello
+	(*HelloAck)(nil),       // 4: d256.nodelink.v1.HelloAck
+	(*Heartbeat)(nil),      // 5: d256.nodelink.v1.Heartbeat
+	(*SystemMetrics)(nil),  // 6: d256.nodelink.v1.SystemMetrics
+	(*XrayStatus)(nil),     // 7: d256.nodelink.v1.XrayStatus
+	(*DesiredState)(nil),   // 8: d256.nodelink.v1.DesiredState
+	(*HotOp)(nil),          // 9: d256.nodelink.v1.HotOp
+	(*RemoveUser)(nil),     // 10: d256.nodelink.v1.RemoveUser
+	(*AddUser)(nil),        // 11: d256.nodelink.v1.AddUser
+	(*RemoveInbound)(nil),  // 12: d256.nodelink.v1.RemoveInbound
+	(*AddInbound)(nil),     // 13: d256.nodelink.v1.AddInbound
+	(*StateAck)(nil),       // 14: d256.nodelink.v1.StateAck
+	(*TrafficEntry)(nil),   // 15: d256.nodelink.v1.TrafficEntry
+	(*TrafficBatch)(nil),   // 16: d256.nodelink.v1.TrafficBatch
+	(*JournalAck)(nil),     // 17: d256.nodelink.v1.JournalAck
+	(*ClientLimit)(nil),    // 18: d256.nodelink.v1.ClientLimit
+	(*LimitsSnapshot)(nil), // 19: d256.nodelink.v1.LimitsSnapshot
 }
 var file_nodelink_v1_nodelink_proto_depIdxs = []int32{
 	3,  // 0: d256.nodelink.v1.NodeToPanel.hello:type_name -> d256.nodelink.v1.Hello
@@ -1602,19 +1778,21 @@ var file_nodelink_v1_nodelink_proto_depIdxs = []int32{
 	5,  // 7: d256.nodelink.v1.PanelToNode.heartbeat:type_name -> d256.nodelink.v1.Heartbeat
 	8,  // 8: d256.nodelink.v1.PanelToNode.desired_state:type_name -> d256.nodelink.v1.DesiredState
 	17, // 9: d256.nodelink.v1.PanelToNode.journal_ack:type_name -> d256.nodelink.v1.JournalAck
-	9,  // 10: d256.nodelink.v1.DesiredState.hot_ops:type_name -> d256.nodelink.v1.HotOp
-	10, // 11: d256.nodelink.v1.HotOp.remove_user:type_name -> d256.nodelink.v1.RemoveUser
-	11, // 12: d256.nodelink.v1.HotOp.add_user:type_name -> d256.nodelink.v1.AddUser
-	12, // 13: d256.nodelink.v1.HotOp.remove_inbound:type_name -> d256.nodelink.v1.RemoveInbound
-	13, // 14: d256.nodelink.v1.HotOp.add_inbound:type_name -> d256.nodelink.v1.AddInbound
-	15, // 15: d256.nodelink.v1.TrafficBatch.entries:type_name -> d256.nodelink.v1.TrafficEntry
-	1,  // 16: d256.nodelink.v1.NodeLink.Connect:input_type -> d256.nodelink.v1.NodeToPanel
-	2,  // 17: d256.nodelink.v1.NodeLink.Connect:output_type -> d256.nodelink.v1.PanelToNode
-	17, // [17:18] is the sub-list for method output_type
-	16, // [16:17] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	19, // 10: d256.nodelink.v1.PanelToNode.limits:type_name -> d256.nodelink.v1.LimitsSnapshot
+	9,  // 11: d256.nodelink.v1.DesiredState.hot_ops:type_name -> d256.nodelink.v1.HotOp
+	10, // 12: d256.nodelink.v1.HotOp.remove_user:type_name -> d256.nodelink.v1.RemoveUser
+	11, // 13: d256.nodelink.v1.HotOp.add_user:type_name -> d256.nodelink.v1.AddUser
+	12, // 14: d256.nodelink.v1.HotOp.remove_inbound:type_name -> d256.nodelink.v1.RemoveInbound
+	13, // 15: d256.nodelink.v1.HotOp.add_inbound:type_name -> d256.nodelink.v1.AddInbound
+	15, // 16: d256.nodelink.v1.TrafficBatch.entries:type_name -> d256.nodelink.v1.TrafficEntry
+	18, // 17: d256.nodelink.v1.LimitsSnapshot.clients:type_name -> d256.nodelink.v1.ClientLimit
+	1,  // 18: d256.nodelink.v1.NodeLink.Connect:input_type -> d256.nodelink.v1.NodeToPanel
+	2,  // 19: d256.nodelink.v1.NodeLink.Connect:output_type -> d256.nodelink.v1.PanelToNode
+	19, // [19:20] is the sub-list for method output_type
+	18, // [18:19] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_nodelink_v1_nodelink_proto_init() }
@@ -1635,6 +1813,7 @@ func file_nodelink_v1_nodelink_proto_init() {
 		(*PanelToNode_Heartbeat)(nil),
 		(*PanelToNode_DesiredState)(nil),
 		(*PanelToNode_JournalAck)(nil),
+		(*PanelToNode_Limits)(nil),
 	}
 	file_nodelink_v1_nodelink_proto_msgTypes[8].OneofWrappers = []any{
 		(*HotOp_RemoveUser)(nil),
@@ -1648,7 +1827,7 @@ func file_nodelink_v1_nodelink_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nodelink_v1_nodelink_proto_rawDesc), len(file_nodelink_v1_nodelink_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   17,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

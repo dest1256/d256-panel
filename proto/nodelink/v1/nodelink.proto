@@ -33,6 +33,7 @@ message PanelToNode {
     Heartbeat heartbeat = 2;
     DesiredState desired_state = 3;
     JournalAck journal_ack = 4;
+    LimitsSnapshot limits = 5;
   }
 }
 
@@ -158,10 +159,31 @@ message TrafficBatch {
   uint64 from_seq = 1;
   uint64 to_seq = 2;
   repeated TrafficEntry entries = 3;
+  // Wall-clock span the usage was measured in (unix seconds). Merged ranges cover the union.
+  int64 start_unix = 4;
+  int64 end_unix = 5;
 }
 
 // JournalAck confirms everything up to and including acked_seq. When a batch does not follow the
 // acknowledged position, the panel answers with the current acked_seq so the node resends from there.
 message JournalAck {
   uint64 acked_seq = 1;
+}
+
+// ClientLimit is what the node needs to keep enforcing a client's limits while the panel is unreachable.
+message ClientLimit {
+  string email = 1;
+  // Total quota in bytes; 0 means unlimited.
+  uint64 quota_bytes = 2;
+  // Bytes the panel had counted for the client when the snapshot was taken.
+  uint64 used_bytes = 3;
+  // Absolute expiry in unix seconds; 0 means none.
+  int64 expiry_unix = 4;
+}
+
+// LimitsSnapshot replaces the node's previous snapshot. The panel sends it on connect and then
+// periodically; it is not part of DesiredState because usage changes constantly.
+message LimitsSnapshot {
+  int64 taken_unix = 1;
+  repeated ClientLimit clients = 2;
 }

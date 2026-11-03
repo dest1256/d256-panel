@@ -241,3 +241,30 @@ func TestJournalEpochResetsPosition(t *testing.T) {
 		t.Fatalf("ack = %d", got)
 	}
 }
+
+func TestLimitsSnapshotCarriesQuotaUsageAndExpiry(t *testing.T) {
+	svc := setup(t)
+	n1, n2 := newNode(t, "n1"), newNode(t, "n2")
+	ib1 := addInbound(t, n1, "in-n1", 20443)
+	ib2 := addInbound(t, n2, "in-n2", 20444)
+	addClient(t, ib1, "alice@example.com")
+	addClient(t, ib2, "bob@example.com")
+	database.GetDB().Model(&xray.ClientTraffic{}).Where("email = ?", "alice@example.com").
+		Updates(map[string]any{"total": 1000, "up": 100, "down": 200, "expiry_time": 1893456000000})
+	srv := startServer(t, svc)
+	st, cancel := openStream(t, svc, srv, n1, 3)
+	defer cancel()
+
+	m, err := recvUntil(st, func(m *pb.PanelToNode) bool { return m.GetLimits() != nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	clients := m.GetLimits().Clients
+	if len(clients) != 1 {
+		t.Fatalf("a node must only get its own clients, got %v", clients)
+	}
+	c := clients[0]
+	if c.Email != "alice@example.com" || c.QuotaBytes != 1000 || c.UsedBytes != 300 || c.ExpiryUnix != 1893456000 {
+		t.Fatalf("limit = %+v", c)
+	}
+}

@@ -101,4 +101,39 @@ docker logs $NODE 2>&1 | grep "desired state applied" | tail -3
 [ "$STARTS_BEFORE" = "$STARTS_AFTER" ] || { echo "HOT UPDATE FAILED: xray was restarted"; exit 1; }
 docker run --rm --network $NET curlimages/curl -s -o /dev/null -w "alice still connected: HTTP %{http_code}\n" --max-time 20 -x socks5h://$CLIENT:1080 http://example.com/
 
+echo "== the panel goes away: traffic keeps flowing and is journaled on the node"
+traffic_of() { json $API/inbounds/list | grep -o '"email":"alice@smoke"[^}]*' | grep -o '"\(up\|down\)":[0-9]*' | tr -d '"updown:' | paste -sd+ | bc 2>/dev/null || echo 0; }
+sum_traffic() { json $API/inbounds/list | grep -o '"email":"alice@smoke"[^}]*' | grep -oE '"(up|down)":[0-9]+' | cut -d: -f2 | awk '{s+=$1} END{print s+0}'; }
+sleep 7
+BEFORE=$(sum_traffic)
+PER_REQUEST=$((BEFORE / 3))
+[ $((PER_REQUEST * 3)) = "$BEFORE" ] || { echo "unexpected traffic before the outage: $BEFORE"; exit 1; }
+echo "bytes per request: $PER_REQUEST (3 requests so far)"
+docker stop $PANEL >/dev/null
+sleep 3
+for n in 1 2 3; do
+  docker run --rm --network $NET curlimages/curl -s -o /dev/null -w "offline request: HTTP %{http_code}
+" --max-time 20 -x socks5h://$CLIENT:1080 http://example.com/
+done
+sleep 7
+docker exec $NODE /usr/local/bin/d256-node status | grep -E "panel link|journal"
+JBYTES=$(docker exec $NODE /usr/local/bin/d256-node status | awk '/journal:/{print $2}')
+[ "${JBYTES:-0}" -gt 0 ] || { echo "JOURNAL EMPTY: usage was not written to disk while offline"; exit 1; }
+
+echo "== the panel is back: the journal is delivered exactly once"
+docker start $PANEL >/dev/null
+for i in $(seq 1 40); do
+  AFTER=$(sum_traffic 2>/dev/null || echo 0)
+  [ "${AFTER:-0}" -gt "$BEFORE" ] && break
+  sleep 1
+done
+sleep 12
+FINAL=$(sum_traffic)
+echo "alice total: before=$BEFORE after-reconnect=$AFTER final=$FINAL"
+[ "$AFTER" -gt "$BEFORE" ] || { echo "OFFLINE DELIVERY FAILED: nothing arrived"; docker logs $NODE 2>&1 | tail -10; exit 1; }
+# six requests went through in total (2 + 1 + 3 offline): nothing lost, nothing counted twice
+EXPECTED=$((6 * PER_REQUEST))
+[ "$FINAL" = "$EXPECTED" ] || { echo "ACCOUNTING MISMATCH: got $FINAL, expected $EXPECTED"; exit 1; }
+docker exec $NODE /usr/local/bin/d256-node status | grep -E "journal"
+
 echo "SMOKE OK"
