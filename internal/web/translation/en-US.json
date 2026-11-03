@@ -208,7 +208,11 @@
       "uptime": "Uptime",
       "importKeepHostSettings": "Keep this machine's settings",
       "importKeepHostSettingsDesc": "Keeps this panel's listen addresses, ports, base path, certificates and node identity instead of taking them from the uploaded file.",
-      "timeRange": "Time range"
+      "timeRange": "Time range",
+      "title": "Overview",
+      "systemHistory": "System history",
+      "backup": "Backup",
+      "panelHost": "Panel host"
     },
     "inbounds": {
       "totalDownUp": "Total Sent/Received",

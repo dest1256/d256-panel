@@ -27,7 +27,6 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/util/reflect_util"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/totp"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/entity"
-	"github.com/mhsanaei/3x-ui/v3/internal/xray"
 	"github.com/mhsanaei/3x-ui/v3/internal/xray/dnsconf"
 )
 
@@ -1311,11 +1310,8 @@ func (s *SettingService) GetIpLimitEnable() (bool, error) {
 // the UI for features that genuinely read the log file (the xray log viewer) —
 // distinct from IP limiting, which works without it.
 func (s *SettingService) GetAccessLogEnable() (bool, error) {
-	accessLogPath, err := xray.GetAccessLogPath()
-	if err != nil {
-		return false, err
-	}
-	return (accessLogPath != "none" && accessLogPath != ""), nil
+	// Xray runs on the nodes, so the panel has no local access log to read.
+	return false, nil
 }
 
 // GetLdapEnable returns whether LDAP is enabled.
