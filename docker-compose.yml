@@ -21,6 +21,7 @@ services:
       # Use a tag or branch after '#', e.g. ...d256-panel.git#v1.0.0
       context: ${D256_PANEL_SRC:-https://github.com/dest1256/d256-panel.git#main}
     image: d256-panel:latest
+    pull_policy: build
     container_name: d256-panel
     restart: unless-stopped
     depends_on:
