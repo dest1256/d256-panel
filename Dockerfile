@@ -24,7 +24,15 @@ COPY proto/go.mod proto/go.sum ./proto/
 RUN mkdir -p /out && CGO_ENABLED=0 go build -mod=mod -trimpath -ldflags "-w -s" -o /out/xray-$(go env GOOS)-$(go env GOARCH) github.com/xtls/xray-core/main
 
 FROM alpine:3.22 AS geo
-RUN apk add --no-cache curl ca-certificates  && mkdir -p /geo && cd /geo  && curl -sfLRO https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat  && curl -sfLRO https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat
+# The same geo files the 3x-ui routing presets refer to (ext:geosite_RU.dat:..., ext:geoip_IR.dat:...).
+RUN apk add --no-cache curl ca-certificates \
+ && mkdir -p /geo && cd /geo \
+ && L=https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download \
+ && I=https://github.com/chocolate4u/Iran-v2ray-rules/releases/latest/download \
+ && R=https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download \
+ && curl -sfL -o geoip.dat $L/geoip.dat && curl -sfL -o geosite.dat $L/geosite.dat \
+ && curl -sfL -o geoip_IR.dat $I/geoip.dat && curl -sfL -o geosite_IR.dat $I/geosite.dat \
+ && curl -sfL -o geoip_RU.dat $R/geoip.dat && curl -sfL -o geosite_RU.dat $R/geosite.dat
 
 FROM alpine:3.22
 RUN apk add --no-cache ca-certificates tzdata \
