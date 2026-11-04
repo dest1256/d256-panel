@@ -86,6 +86,8 @@ var newRoutes = []struct{ method, path string }{
 	{"GET", "/panel/api/nodes/list"},
 	{"POST", "/panel/api/nodes/create"},
 	{"POST", "/panel/api/nodes/importXui/1"},
+	{"POST", "/panel/api/nodes/upgrade/1"},
+	{"GET", "/panel/api/nodes/releases"},
 	{"POST", "/panel/api/nodes/enrollToken/1"},
 }
 

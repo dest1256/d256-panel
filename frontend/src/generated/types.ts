@@ -892,10 +892,20 @@ export interface NodeLive {
   swapUsed: number;
   tcpSockets: number;
   udpSockets: number;
+  upgradeError: string;
+  upgradeState: string;
+  upgradeVersion: string;
   uptimeSecs: number;
   xrayError: string;
   xrayState: string;
   xrayVersion: string;
+}
+
+export interface NodeReleases {
+  checkedAt: number;
+  error: string;
+  latest: string;
+  repo: string;
 }
 
 export interface NodeView {

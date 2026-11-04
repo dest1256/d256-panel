@@ -1408,6 +1408,38 @@ export const sections: readonly Section[] = [
         responseSchema: 'NodeEnrollResponse',
       },
       {
+        method: 'GET',
+        path: '/panel/api/nodes/releases',
+        summary:
+          'Newest published node release (read from GitHub and cached for 30 minutes; force=true refreshes). Used for the "update available" hint.',
+        params: [
+          {
+            name: 'force',
+            in: 'query',
+            type: 'boolean',
+            desc: 'Bypass the cache.',
+            optional: true,
+          },
+        ],
+        responseSchema: 'NodeReleases',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/nodes/upgrade/:id',
+        summary:
+          'Ask a connected node to update itself (including its embedded Xray) to a release. The node downloads the release from its fixed source, verifies a signature with the key built into it, installs it and restarts; the panel only sends the version. Progress is shown in /nodes/live (upgradeState: requested, ok, failed).',
+        params: [
+          { name: 'id', in: 'path', type: 'number', desc: 'Node ID.' },
+          {
+            name: 'version',
+            in: 'body',
+            type: 'string',
+            desc: 'Release tag such as v1.2.3. Empty means the latest release.',
+            optional: true,
+          },
+        ],
+      },
+      {
         method: 'POST',
         path: '/panel/api/nodes/importXui/:id',
         summary:

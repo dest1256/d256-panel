@@ -3893,6 +3893,18 @@ export const SCHEMAS: Record<string, unknown> = {
       "udpSockets": {
         "type": "integer"
       },
+      "upgradeError": {
+        "type": "string"
+      },
+      "upgradeState": {
+        "description": "UpgradeState is \"\", \"requested\", \"ok\" or \"failed\" for the last self-update asked of this node.",
+        "example": "requested",
+        "type": "string"
+      },
+      "upgradeVersion": {
+        "example": "v1.2.3",
+        "type": "string"
+      },
       "uptimeSecs": {
         "format": "int64",
         "type": "integer"
@@ -3932,10 +3944,41 @@ export const SCHEMAS: Record<string, unknown> = {
       "swapUsed",
       "tcpSockets",
       "udpSockets",
+      "upgradeError",
+      "upgradeState",
+      "upgradeVersion",
       "uptimeSecs",
       "xrayError",
       "xrayState",
       "xrayVersion"
+    ],
+    "type": "object"
+  },
+  "NodeReleases": {
+    "description": "NodeReleases is the newest published node release, for the \"update available\" hint.",
+    "properties": {
+      "checkedAt": {
+        "example": 1700000000,
+        "format": "int64",
+        "type": "integer"
+      },
+      "error": {
+        "type": "string"
+      },
+      "latest": {
+        "example": "v1.2.3",
+        "type": "string"
+      },
+      "repo": {
+        "example": "dest1256/d256-node",
+        "type": "string"
+      }
+    },
+    "required": [
+      "checkedAt",
+      "error",
+      "latest",
+      "repo"
     ],
     "type": "object"
   },

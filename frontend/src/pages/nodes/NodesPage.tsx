@@ -27,6 +27,7 @@ import { useNodesQuery } from '@/api/queries/useNodesQuery';
 import type { NodeRecord } from '@/api/queries/useNodesQuery';
 import { useNodesLiveQuery } from '@/api/queries/useNodesLiveQuery';
 import { useNodeMutations } from '@/api/queries/useNodeMutations';
+import { useNodeReleases } from '@/api/queries/useNodeReleases';
 import type { NodeFormPayload } from '@/api/queries/useNodeMutations';
 import AppSidebar from '@/layouts/AppSidebar';
 import NodeList from './NodeList';
@@ -47,7 +48,8 @@ export default function NodesPage() {
 
   const { nodes, loading, fetched, fetchError, refetch, totals } = useNodesQuery();
   const { byId: liveById } = useNodesLiveQuery();
-  const { create, update, remove, setEnable, newEnrollToken } = useNodeMutations();
+  const { create, update, remove, setEnable, newEnrollToken, upgrade } = useNodeMutations();
+  const { releases } = useNodeReleases();
 
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<'add' | 'edit'>('add');
@@ -100,6 +102,27 @@ export default function NodesPage() {
       });
     },
     [modal, t, remove, messageApi],
+  );
+
+  const onUpgrade = useCallback(
+    (node: NodeRecord) => {
+      const version = releases?.latest ?? '';
+      if (!version) {
+        messageApi.error(releases?.error || t('pages.nodes.upgradeNoRelease'));
+        return;
+      }
+      modal.confirm({
+        title: t('pages.nodes.upgradeConfirmTitle', { name: node.name, version }),
+        content: t('pages.nodes.upgradeConfirmContent'),
+        okText: t('pages.nodes.upgrade'),
+        cancelText: t('cancel'),
+        onOk: async () => {
+          const msg = await upgrade(node.id ?? 0, version);
+          if (msg?.success) messageApi.success(t('pages.nodes.upgradeRequested'));
+        },
+      });
+    },
+    [modal, t, upgrade, releases, messageApi],
   );
 
   const onNewToken = useCallback(
@@ -218,6 +241,8 @@ export default function NodesPage() {
                       onEdit={onEdit}
                       onDelete={onDelete}
                       onNewToken={onNewToken}
+                      onUpgrade={onUpgrade}
+                      latestVersion={releases?.latest}
                       onToggleEnable={onToggleEnable}
                     />
                   </Col>

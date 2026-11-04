@@ -25,6 +25,7 @@ message NodeToPanel {
     StateAck state_ack = 5;
     TrafficBatch traffic = 6;
     ActiveConnections active_connections = 7;
+    UpgradeResult upgrade_result = 8;
   }
 }
 
@@ -35,6 +36,7 @@ message PanelToNode {
     DesiredState desired_state = 3;
     JournalAck journal_ack = 4;
     LimitsSnapshot limits = 5;
+    UpgradeRequest upgrade = 6;
   }
 }
 
@@ -231,4 +233,17 @@ message ActiveConnections {
   repeated ClientIp ips = 2;
   // True when the node had more connections than it sent.
   bool truncated = 3;
+}
+
+// The panel asks the node to replace its own binary (which includes the embedded Xray) with a release.
+// The node downloads the release from its fixed source, verifies a signature against the key built into it,
+// and restarts into the new binary. The panel only names the version.
+message UpgradeRequest {
+  string version = 1; // a release tag such as v1.2.3
+}
+
+message UpgradeResult {
+  string version = 1;
+  bool ok = 2;       // true: installed, the node is restarting into it
+  string error = 3;
 }

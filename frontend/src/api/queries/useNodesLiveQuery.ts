@@ -32,6 +32,10 @@ export interface NodeLive {
   uptimeSecs: number;
   journalBytes: number;
   onlineClients: number;
+  // The last self-update asked of the node: '', 'requested', 'ok' or 'failed'.
+  upgradeState: string;
+  upgradeVersion: string;
+  upgradeError: string;
 }
 
 const LIVE_REFRESH_MS = 5000;

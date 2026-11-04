@@ -97,6 +97,10 @@ smoke: ## End-to-end test: panel + node + Xray client (needs ../d256-node images
 integration: ## docker compose: panel + 2 nodes + 2 clients, outage, exactly-once redelivery (needs images and internet)
 	bash deploy/integration/integration.sh
 
+.PHONY: update-e2e
+update-e2e: ## Node self-update end to end with a throw-away key (needs ../d256-node, the d256-panel:local image, internet)
+	bash deploy/update/update-e2e.sh
+
 .PHONY: verify
 verify: lint format-check typecheck test build vulncheck ## Full gate (mirrors CI)
 	@echo "verify: OK"

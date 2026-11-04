@@ -118,7 +118,7 @@ func run(root, outDir string) error {
 		},
 		{
 			Path:        resolveRel(root, "internal/web/controller"),
-			StructAllow: setOf("NodeLive", "NodeEnrollResponse"),
+			StructAllow: setOf("NodeLive", "NodeEnrollResponse", "NodeReleases"),
 		},
 	}
 

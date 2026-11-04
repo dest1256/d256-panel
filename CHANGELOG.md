@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- One-click node updates: the panel shows the newest node release and asks a node to update itself (UpgradeRequest/UpgradeResult in the node link, /panel/api/nodes/releases and /upgrade/:id).
 - docker-compose: builds from GitHub, data in ./db and ./cert next to the compose file, joins an external reverse-proxy network (no bundled Caddy).
 - Stage 7-8: import of a 3x-ui x-ui.db into a node (Nodes -> Import); security tests (anonymous/restricted-token access, CSRF, SQL injection, CSV formulas, hostile uploads); docker compose integration test (panel + 2 nodes + 2 clients); RU/EN READMEs; the inert LDAP settings tab is removed. The protected node mode was dropped by decision.
 - Stage 6: connection accounting. Per-destination usage (client x domain/IP x hour) is stored with retention and rollups; client info dialog shows traffic charts by node/inbound, live connections, domains and IPs (sort, search, node filter, CSV) and devices; device limit is enforced from the limits snapshot.

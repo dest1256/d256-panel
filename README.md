@@ -10,6 +10,7 @@
 - **Узлы:** «Узлы → Добавить» выдаёт одноразовый токен регистрации; узел получает клиентский сертификат от внутреннего CA панели. Статус, задержка, версии, метрики (CPU, RAM, swap, диск, сеть, сокеты, аптайм) на дашборде и на странице узла.
 - **Конфиг:** панель собирает конфиг Xray для каждого узла и шлёт его с номером версии; пользователи и inbound'ы добавляются без перезапуска Xray. Шаблон роутинга/аутбаундов можно задать для каждого узла отдельно.
 - **Учёт:** трафик по клиентам доставляется ровно один раз, в том числе после разрыва связи (журнал на узле). Лимиты трафика, срок и **лимит устройств** узел применяет сам, даже без панели.
+- **Обновление узлов в один клик:** на странице «Узлы» видно, что вышла новая версия узла (она включает Xray); «Обновить узел» просит узел скачать подписанный релиз, проверить подпись и перезапуститься. Настройка ключа подписи и выпуск релизов — в [README узла](https://github.com/dest1256/d256-node#readme).
 - **Подписки** раздаёт только панель, адреса в них — адреса узлов.
 - **Клиент → «i»:** графики трафика (1ч/24ч/7д/30д/свой период, по узлам и inbound'ам), активные подключения (IP, домен, порт, узел, inbound, байты, автообновление), домены и IP за период (сортировка, поиск, фильтр по узлу, CSV), устройства.
 - **Импорт `x-ui.db`:** «Узлы → Импорт из x-ui.db» добавляет inbound'ы, клиентов и трафик из базы 3x-ui на выбранный узел. Существующее не заменяется; неподдерживаемые протоколы (MTProto, AmneziaWG, TUIC), дубликаты e-mail и занятые порты пропускаются с отчётом.
@@ -39,6 +40,7 @@ panel.example.com:2096   { reverse_proxy d256-panel:2096 }   # подписки
 | `XUI_CONN_RETENTION_DAYS` | `30` | сколько хранить почасовые данные по доменам/IP до свёртки в дневные |
 | `XUI_CONN_DAILY_RETENTION_DAYS` | `365` | сколько хранить дневные данные |
 | `XUI_TRAFFIC_RETENTION_DAYS` | `90` | сколько хранить данные графиков трафика |
+| `XUI_NODE_RELEASE_REPO` | `dest1256/d256-node` | репозиторий GitHub, в котором панель ищет новые версии узла |
 
 ## Обновление и бэкап
 Обновление: `docker compose up -d --build` (подтянет свежий код с GitHub; для конкретной версии задайте `D256_PANEL_SRC=https://github.com/dest1256/d256-panel.git#v1.0.0`); миграции БД выполняются при старте.
@@ -50,6 +52,7 @@ panel.example.com:2096   { reverse_proxy d256-panel:2096 }   # подписки
 ./dev make proto          # перегенерировать gRPC-код
 make smoke                # сквозной тест: панель + узел + клиент Xray
 make integration          # docker compose: панель + 2 узла + 2 клиента, обрыв связи, досылка журнала
+make update-e2e           # самообновление узла: чужая подпись отвергается, подписанный релиз ставится
 ```
 `smoke` и `integration` используют образы `d256-panel:local` и `d256-node:local` (`make image` в обоих репозиториях; `d256-node` должен лежать рядом) и выход в интернет.
 
@@ -71,6 +74,7 @@ The 3x-ui UI is kept (look, navigation, dark theme, RU/EN), but the panel **does
 - **Nodes:** *Nodes → Add* issues a one-time enrollment token; the node gets a client certificate from the panel's internal CA. Status, latency, versions and host metrics on the dashboard and the node page.
 - **Config:** the panel renders each node's Xray config and sends it with a version number; users and inbounds are added without restarting Xray. Routing/outbound templates can be set per node.
 - **Accounting:** per-client usage is delivered exactly once, also after an outage (journal on the node). Traffic quota, expiry and the **device limit** are enforced by the node itself, even offline.
+- **One-click node updates:** the Nodes page shows when a newer node release (it includes Xray) exists; "Update node" asks the node to download the signed release, verify the signature and restart. Key setup and releases are described in the node README.
 - **Subscriptions** are served by the panel only, with node addresses.
 - **Client → "i":** traffic charts (1h/24h/7d/30d/custom, by node and inbound), live connections (IP, domain, port, node, inbound, bytes, auto-refresh), domains and IPs per period (sort, search, node filter, CSV), devices.
 - **`x-ui.db` import:** *Nodes → Import from x-ui.db* adds the inbounds, clients and traffic of a 3x-ui database to the chosen node. Nothing existing is replaced; unsupported protocols (MTProto, AmneziaWG, TUIC), duplicate e-mails and busy ports are skipped and reported.

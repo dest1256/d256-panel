@@ -1197,7 +1197,8 @@
         "delete": "Delete node",
         "deleted": "Node deleted",
         "fillRequired": "Name and address are required",
-        "import": "Import failed"
+        "import": "Import failed",
+        "upgrade": "Update failed"
       },
       "createAndEnroll": "Create and get token",
       "addressHint": "Public host name or IP used in subscription links",
@@ -1235,7 +1236,16 @@
       "importXuiDone": "Imported {{inbounds}} inbounds, {{clients}} clients",
       "importXuiSkipped": "Skipped",
       "importXuiNode": "Target node",
-      "deleteWithInbounds": "Also delete the inbounds of this node and their clients"
+      "deleteWithInbounds": "Also delete the inbounds of this node and their clients",
+      "upgrade": "Update node",
+      "updating": "Updating…",
+      "updateFailed": "Update failed",
+      "updateAvailable": "Update {{version}}",
+      "updateAvailableHint": "A newer node release is available. Use the actions menu to update.",
+      "upgradeConfirmTitle": "Update {{name}} to {{version}}?",
+      "upgradeConfirmContent": "The node downloads the signed release, installs it (this includes the embedded Xray) and restarts. Clients are disconnected for a few seconds; usage is kept in the node journal.",
+      "upgradeRequested": "The node was asked to update",
+      "upgradeNoRelease": "No published node release is known yet"
     },
     "settings": {
       "defaultTag": "Default",

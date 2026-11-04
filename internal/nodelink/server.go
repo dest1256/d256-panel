@@ -51,6 +51,8 @@ type Snapshot struct {
 	// Active is the node's latest live connection snapshot (replaced every few seconds).
 	Active   *pb.ActiveConnections
 	ActiveAt time.Time
+	// Upgrade is the last self-update the panel asked this node for.
+	Upgrade UpgradeState
 }
 
 // Hub tracks live node sessions and their latest metrics.
@@ -62,6 +64,8 @@ type Hub struct {
 
 type session struct {
 	cancel context.CancelFunc
+	// upgrade carries a release version to send to the node as an UpgradeRequest.
+	upgrade chan string
 }
 
 func newHub() *Hub { return &Hub{sessions: map[int]*session{}, snaps: map[int]*Snapshot{}} }
@@ -320,7 +324,7 @@ func (s *Server) Connect(stream pb.NodeLink_ConnectServer) error {
 		"xray_version":  truncate(hello.XrayVersion, 64),
 	})
 
-	sess := &session{cancel: cancel}
+	sess := &session{cancel: cancel, upgrade: make(chan string, 1)}
 	s.hub.attach(node.Id, sess)
 	s.hub.update(node.Id, func(sn *Snapshot) {
 		sn.NodeVersion, sn.XrayVersion = truncate(hello.NodeVersion, 64), truncate(hello.XrayVersion, 64)
@@ -364,6 +368,11 @@ func (s *Server) Connect(stream pb.NodeLink_ConnectServer) error {
 			if err := s.handle(stream, node, st, r.msg); err != nil {
 				return err
 			}
+		case v := <-sess.upgrade:
+			logger.Infof("asking node %d (%s) to update to %s", node.Id, node.Name, v)
+			if err := stream.Send(&pb.PanelToNode{Msg: &pb.PanelToNode_Upgrade{Upgrade: &pb.UpgradeRequest{Version: v}}}); err != nil {
+				return err
+			}
 		case <-push.C:
 			if err := s.syncDesired(stream, node.Id, st, false); err != nil {
 				return err
@@ -403,6 +412,8 @@ func (s *Server) handle(stream pb.NodeLink_ConnectServer, node *model.Node, st *
 	case *pb.NodeToPanel_StateAck:
 		s.recordStateAck(node.Id, x.StateAck)
 		st.onAck(x.StateAck.Version, x.StateAck.Ok)
+	case *pb.NodeToPanel_UpgradeResult:
+		s.recordUpgradeResult(node.Id, x.UpgradeResult)
 	case *pb.NodeToPanel_Traffic:
 		return s.handleTraffic(stream, node.Id, x.Traffic)
 	case *pb.NodeToPanel_Hello:

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Badge, Button, Card, Descriptions, Dropdown, Switch, Table, Tag } from 'antd';
+import { Badge, Button, Card, Descriptions, Dropdown, Switch, Table, Tag, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
   DeleteOutlined,
@@ -10,23 +10,29 @@ import {
   KeyOutlined,
   MoreOutlined,
   PlusOutlined,
+  SyncOutlined,
+  CloudSyncOutlined,
 } from '@ant-design/icons';
 
 import NodeHistoryPanel from './NodeHistoryPanel';
 import type { NodeRecord } from '@/api/queries/useNodesQuery';
 import type { NodeLive } from '@/api/queries/useNodesLiveQuery';
 import { CPUFormatter, SizeFormatter } from '@/utils';
+import { isNewerRelease } from '@/lib/nodes/version';
 import { activateOnKey } from '@/utils/a11y';
 import './NodeList.css';
 
 interface NodeListProps {
   nodes: NodeRecord[];
   liveById: Map<number, NodeLive>;
+  // Newest published node release ('' when unknown).
+  latestVersion?: string;
   loading?: boolean;
   onAdd: () => void;
   onEdit: (node: NodeRecord) => void;
   onDelete: (node: NodeRecord) => void;
   onNewToken: (node: NodeRecord) => void;
+  onUpgrade: (node: NodeRecord) => void;
   onToggleEnable: (node: NodeRecord, next: boolean) => void;
 }
 
@@ -118,6 +124,8 @@ export default function NodeList({
   onEdit,
   onDelete,
   onNewToken,
+  onUpgrade,
+  latestVersion,
   onToggleEnable,
 }: NodeListProps) {
   const { t } = useTranslation();
@@ -199,8 +207,37 @@ export default function NodeList({
       },
       {
         title: t('pages.nodes.nodeVersion'),
-        width: 110,
-        render: (_: unknown, n) => (n.panelVersion ? <Tag>{n.panelVersion}</Tag> : '-'),
+        width: 170,
+        render: (_: unknown, n) => {
+          const live = liveById.get(n.id ?? 0);
+          const state = live?.upgradeState;
+          const updating =
+            state === 'requested' || (state === 'ok' && live?.nodeVersion !== live?.upgradeVersion);
+          return (
+            <span>
+              {n.panelVersion ? <Tag>{n.panelVersion}</Tag> : '-'}
+              {updating && (
+                <Tag icon={<SyncOutlined spin aria-hidden />} color="processing">
+                  {t('pages.nodes.updating')}
+                </Tag>
+              )}
+              {state === 'failed' && (
+                <Tooltip title={live?.upgradeError}>
+                  <Tag color="error">{t('pages.nodes.updateFailed')}</Tag>
+                </Tooltip>
+              )}
+              {!updating &&
+                n.status === 'online' &&
+                isNewerRelease(latestVersion, n.panelVersion) && (
+                  <Tooltip title={t('pages.nodes.updateAvailableHint')}>
+                    <Tag color="gold">
+                      {t('pages.nodes.updateAvailable', { version: latestVersion })}
+                    </Tag>
+                  </Tooltip>
+                )}
+            </span>
+          );
+        },
       },
       {
         title: t('pages.nodes.enable'),
@@ -230,6 +267,13 @@ export default function NodeList({
                   onClick: () => onEdit(n),
                 },
                 {
+                  key: 'upgrade',
+                  icon: <CloudSyncOutlined aria-hidden />,
+                  label: t('pages.nodes.upgrade'),
+                  disabled: n.status !== 'online',
+                  onClick: () => onUpgrade(n),
+                },
+                {
                   key: 'token',
                   icon: <KeyOutlined aria-hidden />,
                   label: t('pages.nodes.newToken'),
@@ -254,7 +298,17 @@ export default function NodeList({
         ),
       },
     ],
-    [t, showAddress, liveById, onEdit, onDelete, onNewToken, onToggleEnable],
+    [
+      t,
+      showAddress,
+      liveById,
+      latestVersion,
+      onEdit,
+      onDelete,
+      onNewToken,
+      onUpgrade,
+      onToggleEnable,
+    ],
   );
 
   return (

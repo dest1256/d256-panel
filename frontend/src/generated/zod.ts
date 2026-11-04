@@ -944,12 +944,23 @@ export const NodeLiveSchema = z.object({
   swapUsed: z.number().int(),
   tcpSockets: z.number().int(),
   udpSockets: z.number().int(),
+  upgradeError: z.string(),
+  upgradeState: z.string(),
+  upgradeVersion: z.string(),
   uptimeSecs: z.number().int(),
   xrayError: z.string(),
   xrayState: z.string(),
   xrayVersion: z.string(),
 });
 export type NodeLive = z.infer<typeof NodeLiveSchema>;
+
+export const NodeReleasesSchema = z.object({
+  checkedAt: z.number().int(),
+  error: z.string(),
+  latest: z.string(),
+  repo: z.string(),
+});
+export type NodeReleases = z.infer<typeof NodeReleasesSchema>;
 
 export const NodeViewSchema = z.object({
   activeCount: z.number().int(),

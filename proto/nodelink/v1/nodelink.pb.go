@@ -80,6 +80,7 @@ type NodeToPanel struct {
 	//	*NodeToPanel_StateAck
 	//	*NodeToPanel_Traffic
 	//	*NodeToPanel_ActiveConnections
+	//	*NodeToPanel_UpgradeResult
 	Msg           isNodeToPanel_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -185,6 +186,15 @@ func (x *NodeToPanel) GetActiveConnections() *ActiveConnections {
 	return nil
 }
 
+func (x *NodeToPanel) GetUpgradeResult() *UpgradeResult {
+	if x != nil {
+		if x, ok := x.Msg.(*NodeToPanel_UpgradeResult); ok {
+			return x.UpgradeResult
+		}
+	}
+	return nil
+}
+
 type isNodeToPanel_Msg interface {
 	isNodeToPanel_Msg()
 }
@@ -217,6 +227,10 @@ type NodeToPanel_ActiveConnections struct {
 	ActiveConnections *ActiveConnections `protobuf:"bytes,7,opt,name=active_connections,json=activeConnections,proto3,oneof"`
 }
 
+type NodeToPanel_UpgradeResult struct {
+	UpgradeResult *UpgradeResult `protobuf:"bytes,8,opt,name=upgrade_result,json=upgradeResult,proto3,oneof"`
+}
+
 func (*NodeToPanel_Hello) isNodeToPanel_Msg() {}
 
 func (*NodeToPanel_Heartbeat) isNodeToPanel_Msg() {}
@@ -231,6 +245,8 @@ func (*NodeToPanel_Traffic) isNodeToPanel_Msg() {}
 
 func (*NodeToPanel_ActiveConnections) isNodeToPanel_Msg() {}
 
+func (*NodeToPanel_UpgradeResult) isNodeToPanel_Msg() {}
+
 type PanelToNode struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Msg:
@@ -240,6 +256,7 @@ type PanelToNode struct {
 	//	*PanelToNode_DesiredState
 	//	*PanelToNode_JournalAck
 	//	*PanelToNode_Limits
+	//	*PanelToNode_Upgrade
 	Msg           isPanelToNode_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -327,6 +344,15 @@ func (x *PanelToNode) GetLimits() *LimitsSnapshot {
 	return nil
 }
 
+func (x *PanelToNode) GetUpgrade() *UpgradeRequest {
+	if x != nil {
+		if x, ok := x.Msg.(*PanelToNode_Upgrade); ok {
+			return x.Upgrade
+		}
+	}
+	return nil
+}
+
 type isPanelToNode_Msg interface {
 	isPanelToNode_Msg()
 }
@@ -351,6 +377,10 @@ type PanelToNode_Limits struct {
 	Limits *LimitsSnapshot `protobuf:"bytes,5,opt,name=limits,proto3,oneof"`
 }
 
+type PanelToNode_Upgrade struct {
+	Upgrade *UpgradeRequest `protobuf:"bytes,6,opt,name=upgrade,proto3,oneof"`
+}
+
 func (*PanelToNode_HelloAck) isPanelToNode_Msg() {}
 
 func (*PanelToNode_Heartbeat) isPanelToNode_Msg() {}
@@ -360,6 +390,8 @@ func (*PanelToNode_DesiredState) isPanelToNode_Msg() {}
 func (*PanelToNode_JournalAck) isPanelToNode_Msg() {}
 
 func (*PanelToNode_Limits) isPanelToNode_Msg() {}
+
+func (*PanelToNode_Upgrade) isPanelToNode_Msg() {}
 
 type Hello struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
@@ -1958,11 +1990,118 @@ func (x *ActiveConnections) GetTruncated() bool {
 	return false
 }
 
+// The panel asks the node to replace its own binary (which includes the embedded Xray) with a release.
+// The node downloads the release from its fixed source, verifies a signature against the key built into it,
+// and restarts into the new binary. The panel only names the version.
+type UpgradeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"` // a release tag such as v1.2.3
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpgradeRequest) Reset() {
+	*x = UpgradeRequest{}
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpgradeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpgradeRequest) ProtoMessage() {}
+
+func (x *UpgradeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpgradeRequest.ProtoReflect.Descriptor instead.
+func (*UpgradeRequest) Descriptor() ([]byte, []int) {
+	return file_nodelink_v1_nodelink_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *UpgradeRequest) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+type UpgradeResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
+	Ok            bool                   `protobuf:"varint,2,opt,name=ok,proto3" json:"ok,omitempty"` // true: installed, the node is restarting into it
+	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpgradeResult) Reset() {
+	*x = UpgradeResult{}
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpgradeResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpgradeResult) ProtoMessage() {}
+
+func (x *UpgradeResult) ProtoReflect() protoreflect.Message {
+	mi := &file_nodelink_v1_nodelink_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpgradeResult.ProtoReflect.Descriptor instead.
+func (*UpgradeResult) Descriptor() ([]byte, []int) {
+	return file_nodelink_v1_nodelink_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *UpgradeResult) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *UpgradeResult) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *UpgradeResult) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
 var File_nodelink_v1_nodelink_proto protoreflect.FileDescriptor
 
 const file_nodelink_v1_nodelink_proto_rawDesc = "" +
 	"\n" +
-	"\x1anodelink/v1/nodelink.proto\x12\x10d256.nodelink.v1\"\xda\x03\n" +
+	"\x1anodelink/v1/nodelink.proto\x12\x10d256.nodelink.v1\"\xa4\x04\n" +
 	"\vNodeToPanel\x12/\n" +
 	"\x05hello\x18\x01 \x01(\v2\x17.d256.nodelink.v1.HelloH\x00R\x05hello\x12;\n" +
 	"\theartbeat\x18\x02 \x01(\v2\x1b.d256.nodelink.v1.HeartbeatH\x00R\theartbeat\x12H\n" +
@@ -1971,15 +2110,17 @@ const file_nodelink_v1_nodelink_proto_rawDesc = "" +
 	"xrayStatus\x129\n" +
 	"\tstate_ack\x18\x05 \x01(\v2\x1a.d256.nodelink.v1.StateAckH\x00R\bstateAck\x12:\n" +
 	"\atraffic\x18\x06 \x01(\v2\x1e.d256.nodelink.v1.TrafficBatchH\x00R\atraffic\x12T\n" +
-	"\x12active_connections\x18\a \x01(\v2#.d256.nodelink.v1.ActiveConnectionsH\x00R\x11activeConnectionsB\x05\n" +
-	"\x03msg\"\xd0\x02\n" +
+	"\x12active_connections\x18\a \x01(\v2#.d256.nodelink.v1.ActiveConnectionsH\x00R\x11activeConnections\x12H\n" +
+	"\x0eupgrade_result\x18\b \x01(\v2\x1f.d256.nodelink.v1.UpgradeResultH\x00R\rupgradeResultB\x05\n" +
+	"\x03msg\"\x8e\x03\n" +
 	"\vPanelToNode\x129\n" +
 	"\thello_ack\x18\x01 \x01(\v2\x1a.d256.nodelink.v1.HelloAckH\x00R\bhelloAck\x12;\n" +
 	"\theartbeat\x18\x02 \x01(\v2\x1b.d256.nodelink.v1.HeartbeatH\x00R\theartbeat\x12E\n" +
 	"\rdesired_state\x18\x03 \x01(\v2\x1e.d256.nodelink.v1.DesiredStateH\x00R\fdesiredState\x12?\n" +
 	"\vjournal_ack\x18\x04 \x01(\v2\x1c.d256.nodelink.v1.JournalAckH\x00R\n" +
 	"journalAck\x12:\n" +
-	"\x06limits\x18\x05 \x01(\v2 .d256.nodelink.v1.LimitsSnapshotH\x00R\x06limitsB\x05\n" +
+	"\x06limits\x18\x05 \x01(\v2 .d256.nodelink.v1.LimitsSnapshotH\x00R\x06limits\x12<\n" +
+	"\aupgrade\x18\x06 \x01(\v2 .d256.nodelink.v1.UpgradeRequestH\x00R\aupgradeB\x05\n" +
 	"\x03msg\"\xf5\x01\n" +
 	"\x05Hello\x12)\n" +
 	"\x10protocol_version\x18\x01 \x01(\rR\x0fprotocolVersion\x12!\n" +
@@ -2125,7 +2266,13 @@ const file_nodelink_v1_nodelink_proto_rawDesc = "" +
 	"\x11ActiveConnections\x122\n" +
 	"\x05conns\x18\x01 \x03(\v2\x1c.d256.nodelink.v1.ActiveConnR\x05conns\x12,\n" +
 	"\x03ips\x18\x02 \x03(\v2\x1a.d256.nodelink.v1.ClientIpR\x03ips\x12\x1c\n" +
-	"\ttruncated\x18\x03 \x01(\bR\ttruncated*K\n" +
+	"\ttruncated\x18\x03 \x01(\bR\ttruncated\"*\n" +
+	"\x0eUpgradeRequest\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\tR\aversion\"O\n" +
+	"\rUpgradeResult\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\tR\aversion\x12\x0e\n" +
+	"\x02ok\x18\x02 \x01(\bR\x02ok\x12\x14\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error*K\n" +
 	"\x0fProtocolVersion\x12 \n" +
 	"\x1cPROTOCOL_VERSION_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12PROTOCOL_VERSION_1\x10\x012W\n" +
@@ -2145,7 +2292,7 @@ func file_nodelink_v1_nodelink_proto_rawDescGZIP() []byte {
 }
 
 var file_nodelink_v1_nodelink_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_nodelink_v1_nodelink_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_nodelink_v1_nodelink_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_nodelink_v1_nodelink_proto_goTypes = []any{
 	(ProtocolVersion)(0),      // 0: d256.nodelink.v1.ProtocolVersion
 	(*NodeToPanel)(nil),       // 1: d256.nodelink.v1.NodeToPanel
@@ -2171,6 +2318,8 @@ var file_nodelink_v1_nodelink_proto_goTypes = []any{
 	(*ActiveConn)(nil),        // 21: d256.nodelink.v1.ActiveConn
 	(*ClientIp)(nil),          // 22: d256.nodelink.v1.ClientIp
 	(*ActiveConnections)(nil), // 23: d256.nodelink.v1.ActiveConnections
+	(*UpgradeRequest)(nil),    // 24: d256.nodelink.v1.UpgradeRequest
+	(*UpgradeResult)(nil),     // 25: d256.nodelink.v1.UpgradeResult
 }
 var file_nodelink_v1_nodelink_proto_depIdxs = []int32{
 	3,  // 0: d256.nodelink.v1.NodeToPanel.hello:type_name -> d256.nodelink.v1.Hello
@@ -2180,28 +2329,30 @@ var file_nodelink_v1_nodelink_proto_depIdxs = []int32{
 	14, // 4: d256.nodelink.v1.NodeToPanel.state_ack:type_name -> d256.nodelink.v1.StateAck
 	16, // 5: d256.nodelink.v1.NodeToPanel.traffic:type_name -> d256.nodelink.v1.TrafficBatch
 	23, // 6: d256.nodelink.v1.NodeToPanel.active_connections:type_name -> d256.nodelink.v1.ActiveConnections
-	4,  // 7: d256.nodelink.v1.PanelToNode.hello_ack:type_name -> d256.nodelink.v1.HelloAck
-	5,  // 8: d256.nodelink.v1.PanelToNode.heartbeat:type_name -> d256.nodelink.v1.Heartbeat
-	8,  // 9: d256.nodelink.v1.PanelToNode.desired_state:type_name -> d256.nodelink.v1.DesiredState
-	17, // 10: d256.nodelink.v1.PanelToNode.journal_ack:type_name -> d256.nodelink.v1.JournalAck
-	19, // 11: d256.nodelink.v1.PanelToNode.limits:type_name -> d256.nodelink.v1.LimitsSnapshot
-	9,  // 12: d256.nodelink.v1.DesiredState.hot_ops:type_name -> d256.nodelink.v1.HotOp
-	10, // 13: d256.nodelink.v1.HotOp.remove_user:type_name -> d256.nodelink.v1.RemoveUser
-	11, // 14: d256.nodelink.v1.HotOp.add_user:type_name -> d256.nodelink.v1.AddUser
-	12, // 15: d256.nodelink.v1.HotOp.remove_inbound:type_name -> d256.nodelink.v1.RemoveInbound
-	13, // 16: d256.nodelink.v1.HotOp.add_inbound:type_name -> d256.nodelink.v1.AddInbound
-	15, // 17: d256.nodelink.v1.TrafficBatch.entries:type_name -> d256.nodelink.v1.TrafficEntry
-	20, // 18: d256.nodelink.v1.TrafficBatch.conns:type_name -> d256.nodelink.v1.ConnEntry
-	18, // 19: d256.nodelink.v1.LimitsSnapshot.clients:type_name -> d256.nodelink.v1.ClientLimit
-	21, // 20: d256.nodelink.v1.ActiveConnections.conns:type_name -> d256.nodelink.v1.ActiveConn
-	22, // 21: d256.nodelink.v1.ActiveConnections.ips:type_name -> d256.nodelink.v1.ClientIp
-	1,  // 22: d256.nodelink.v1.NodeLink.Connect:input_type -> d256.nodelink.v1.NodeToPanel
-	2,  // 23: d256.nodelink.v1.NodeLink.Connect:output_type -> d256.nodelink.v1.PanelToNode
-	23, // [23:24] is the sub-list for method output_type
-	22, // [22:23] is the sub-list for method input_type
-	22, // [22:22] is the sub-list for extension type_name
-	22, // [22:22] is the sub-list for extension extendee
-	0,  // [0:22] is the sub-list for field type_name
+	25, // 7: d256.nodelink.v1.NodeToPanel.upgrade_result:type_name -> d256.nodelink.v1.UpgradeResult
+	4,  // 8: d256.nodelink.v1.PanelToNode.hello_ack:type_name -> d256.nodelink.v1.HelloAck
+	5,  // 9: d256.nodelink.v1.PanelToNode.heartbeat:type_name -> d256.nodelink.v1.Heartbeat
+	8,  // 10: d256.nodelink.v1.PanelToNode.desired_state:type_name -> d256.nodelink.v1.DesiredState
+	17, // 11: d256.nodelink.v1.PanelToNode.journal_ack:type_name -> d256.nodelink.v1.JournalAck
+	19, // 12: d256.nodelink.v1.PanelToNode.limits:type_name -> d256.nodelink.v1.LimitsSnapshot
+	24, // 13: d256.nodelink.v1.PanelToNode.upgrade:type_name -> d256.nodelink.v1.UpgradeRequest
+	9,  // 14: d256.nodelink.v1.DesiredState.hot_ops:type_name -> d256.nodelink.v1.HotOp
+	10, // 15: d256.nodelink.v1.HotOp.remove_user:type_name -> d256.nodelink.v1.RemoveUser
+	11, // 16: d256.nodelink.v1.HotOp.add_user:type_name -> d256.nodelink.v1.AddUser
+	12, // 17: d256.nodelink.v1.HotOp.remove_inbound:type_name -> d256.nodelink.v1.RemoveInbound
+	13, // 18: d256.nodelink.v1.HotOp.add_inbound:type_name -> d256.nodelink.v1.AddInbound
+	15, // 19: d256.nodelink.v1.TrafficBatch.entries:type_name -> d256.nodelink.v1.TrafficEntry
+	20, // 20: d256.nodelink.v1.TrafficBatch.conns:type_name -> d256.nodelink.v1.ConnEntry
+	18, // 21: d256.nodelink.v1.LimitsSnapshot.clients:type_name -> d256.nodelink.v1.ClientLimit
+	21, // 22: d256.nodelink.v1.ActiveConnections.conns:type_name -> d256.nodelink.v1.ActiveConn
+	22, // 23: d256.nodelink.v1.ActiveConnections.ips:type_name -> d256.nodelink.v1.ClientIp
+	1,  // 24: d256.nodelink.v1.NodeLink.Connect:input_type -> d256.nodelink.v1.NodeToPanel
+	2,  // 25: d256.nodelink.v1.NodeLink.Connect:output_type -> d256.nodelink.v1.PanelToNode
+	25, // [25:26] is the sub-list for method output_type
+	24, // [24:25] is the sub-list for method input_type
+	24, // [24:24] is the sub-list for extension type_name
+	24, // [24:24] is the sub-list for extension extendee
+	0,  // [0:24] is the sub-list for field type_name
 }
 
 func init() { file_nodelink_v1_nodelink_proto_init() }
@@ -2217,6 +2368,7 @@ func file_nodelink_v1_nodelink_proto_init() {
 		(*NodeToPanel_StateAck)(nil),
 		(*NodeToPanel_Traffic)(nil),
 		(*NodeToPanel_ActiveConnections)(nil),
+		(*NodeToPanel_UpgradeResult)(nil),
 	}
 	file_nodelink_v1_nodelink_proto_msgTypes[1].OneofWrappers = []any{
 		(*PanelToNode_HelloAck)(nil),
@@ -2224,6 +2376,7 @@ func file_nodelink_v1_nodelink_proto_init() {
 		(*PanelToNode_DesiredState)(nil),
 		(*PanelToNode_JournalAck)(nil),
 		(*PanelToNode_Limits)(nil),
+		(*PanelToNode_Upgrade)(nil),
 	}
 	file_nodelink_v1_nodelink_proto_msgTypes[8].OneofWrappers = []any{
 		(*HotOp_RemoveUser)(nil),
@@ -2237,7 +2390,7 @@ func file_nodelink_v1_nodelink_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nodelink_v1_nodelink_proto_rawDesc), len(file_nodelink_v1_nodelink_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   23,
+			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

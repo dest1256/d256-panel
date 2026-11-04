@@ -27,12 +27,14 @@ func (a *NodeController) initRouter(g *gin.RouterGroup) {
 	g.GET("/list", a.list)
 	g.GET("/get/:id", a.get)
 	g.GET("/live", a.live)
+	g.GET("/releases", a.releases)
 	g.GET("/history/:id/:metric/:bucket", a.history)
 
 	g.POST("/create", a.create)
 	g.POST("/update/:id", a.update)
 	g.POST("/enrollToken/:id", a.enrollToken)
 	g.POST("/importXui/:id", a.importXui)
+	g.POST("/upgrade/:id", a.upgrade)
 	g.POST("/del/:id", a.del)
 	g.POST("/setEnable/:id", a.setEnable)
 }
@@ -216,6 +218,10 @@ type NodeLive struct {
 	UptimeSecs    uint64  `json:"uptimeSecs"`
 	JournalBytes  uint64  `json:"journalBytes"`
 	OnlineClients uint32  `json:"onlineClients"`
+	// UpgradeState is "", "requested", "ok" or "failed" for the last self-update asked of this node.
+	UpgradeState   string `json:"upgradeState" example:"requested"`
+	UpgradeVersion string `json:"upgradeVersion" example:"v1.2.3"`
+	UpgradeError   string `json:"upgradeError"`
 }
 
 // live returns the latest metrics of every node that has connected since the panel started.
@@ -226,6 +232,7 @@ func (a *NodeController) live(c *gin.Context) {
 			l := NodeLive{
 				NodeID: sn.NodeID, Online: sn.Online, LatencyMs: sn.LatencyMs, LastSeen: sn.LastSeen.Unix(),
 				NodeVersion: sn.NodeVersion, XrayVersion: sn.XrayVersion,
+				UpgradeState: sn.Upgrade.State, UpgradeVersion: sn.Upgrade.Version, UpgradeError: sn.Upgrade.Error,
 			}
 			if x := sn.Xray; x != nil {
 				l.XrayState, l.XrayError = x.State, x.Error
@@ -286,4 +293,56 @@ func (a *NodeController) importXui(c *gin.Context) {
 	}
 	notifyClientsChanged()
 	jsonObj(c, res, nil)
+}
+
+// NodeReleases is the newest published node release, for the "update available" hint.
+type NodeReleases struct {
+	Latest    string `json:"latest" example:"v1.2.3"`
+	Repo      string `json:"repo" example:"dest1256/d256-node"`
+	CheckedAt int64  `json:"checkedAt" example:"1700000000"`
+	Error     string `json:"error"`
+}
+
+// releases reports the latest node release published on GitHub (cached; ?force=true refreshes).
+func (a *NodeController) releases(c *gin.Context) {
+	tag, at, err := nodelink.LatestNodeRelease(c.Request.Context(), c.Query("force") == "true")
+	out := NodeReleases{Latest: tag, Repo: nodelink.NodeReleaseRepo(), CheckedAt: at.Unix()}
+	if err != nil {
+		out.Error = err.Error()
+	}
+	jsonObj(c, out, nil)
+}
+
+// upgrade asks a connected node to update itself (and its embedded Xray) to a release.
+func (a *NodeController) upgrade(c *gin.Context) {
+	id, ok := nodeID(c)
+	if !ok {
+		return
+	}
+	body := struct {
+		Version string `json:"version" form:"version"`
+	}{}
+	_ = c.ShouldBind(&body)
+	version := strings.TrimSpace(body.Version)
+	if version == "" {
+		tag, _, err := nodelink.LatestNodeRelease(c.Request.Context(), false)
+		if err != nil || tag == "" {
+			if err == nil {
+				err = fmt.Errorf("no release version known")
+			}
+			jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.upgrade"), err)
+			return
+		}
+		version = tag
+	}
+	_, srv := nodelink.Default()
+	if srv == nil {
+		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.upgrade"), fmt.Errorf("the node link is not running"))
+		return
+	}
+	if err := srv.Hub().RequestUpgrade(id, version); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.upgrade"), err)
+		return
+	}
+	jsonObj(c, gin.H{"version": version}, nil)
 }

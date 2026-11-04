@@ -40,6 +40,11 @@ export function useNodeMutations() {
       HttpUtil.post(`/panel/api/nodes/del/${id}`, { withInbounds }),
     onSuccess,
   });
+  const upgradeMut = useMutation({
+    mutationFn: ({ id, version }: { id: number; version: string }) =>
+      HttpUtil.post<{ version: string }>(`/panel/api/nodes/upgrade/${id}`, { version }),
+    onSuccess,
+  });
   const setEnableMut = useMutation({
     mutationFn: ({ id, enable }: { id: number; enable: boolean }) =>
       HttpUtil.post(`/panel/api/nodes/setEnable/${id}`, { enable }),
@@ -54,6 +59,7 @@ export function useNodeMutations() {
     create: (payload: NodeFormPayload) => createMut.mutateAsync(payload),
     update: (id: number, payload: NodeFormPayload) => updateMut.mutateAsync({ id, payload }),
     remove: (id: number, withInbounds = false) => removeMut.mutateAsync({ id, withInbounds }),
+    upgrade: (id: number, version: string) => upgradeMut.mutateAsync({ id, version }),
     setEnable: (id: number, enable: boolean) => setEnableMut.mutateAsync({ id, enable }),
     newEnrollToken: (id: number) => enrollTokenMut.mutateAsync(id),
   };

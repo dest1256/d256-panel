@@ -3919,6 +3919,18 @@
           "udpSockets": {
             "type": "integer"
           },
+          "upgradeError": {
+            "type": "string"
+          },
+          "upgradeState": {
+            "description": "UpgradeState is \"\", \"requested\", \"ok\" or \"failed\" for the last self-update asked of this node.",
+            "example": "requested",
+            "type": "string"
+          },
+          "upgradeVersion": {
+            "example": "v1.2.3",
+            "type": "string"
+          },
           "uptimeSecs": {
             "format": "int64",
             "type": "integer"
@@ -3958,10 +3970,41 @@
           "swapUsed",
           "tcpSockets",
           "udpSockets",
+          "upgradeError",
+          "upgradeState",
+          "upgradeVersion",
           "uptimeSecs",
           "xrayError",
           "xrayState",
           "xrayVersion"
+        ],
+        "type": "object"
+      },
+      "NodeReleases": {
+        "description": "NodeReleases is the newest published node release, for the \"update available\" hint.",
+        "properties": {
+          "checkedAt": {
+            "example": 1700000000,
+            "format": "int64",
+            "type": "integer"
+          },
+          "error": {
+            "type": "string"
+          },
+          "latest": {
+            "example": "v1.2.3",
+            "type": "string"
+          },
+          "repo": {
+            "example": "dest1256/d256-node",
+            "type": "string"
+          }
+        },
+        "required": [
+          "checkedAt",
+          "error",
+          "latest",
+          "repo"
         ],
         "type": "object"
       },
@@ -9688,6 +9731,9 @@
                       "swapUsed": 0,
                       "tcpSockets": 0,
                       "udpSockets": 0,
+                      "upgradeError": "",
+                      "upgradeState": "requested",
+                      "upgradeVersion": "v1.2.3",
                       "uptimeSecs": 0,
                       "xrayError": "",
                       "xrayState": "not_configured",
@@ -9853,6 +9899,115 @@
                   "obj": {
                     "nodeId": 1,
                     "token": "1.k3b1..."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/nodes/releases": {
+      "get": {
+        "tags": [
+          "Nodes"
+        ],
+        "summary": "Newest published node release (read from GitHub and cached for 30 minutes; force=true refreshes). Used for the \"update available\" hint.",
+        "operationId": "get_panel_api_nodes_releases",
+        "parameters": [
+          {
+            "name": "force",
+            "in": "query",
+            "required": false,
+            "description": "Bypass the cache.",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "$ref": "#/components/schemas/NodeReleases"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "checkedAt": 1700000000,
+                    "error": "",
+                    "latest": "v1.2.3",
+                    "repo": "dest1256/d256-node"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/nodes/upgrade/{id}": {
+      "post": {
+        "tags": [
+          "Nodes"
+        ],
+        "summary": "Ask a connected node to update itself (including its embedded Xray) to a release. The node downloads the release from its fixed source, verifies a signature with the key built into it, installs it and restarts; the panel only sends the version. Progress is shown in /nodes/live (upgradeState: requested, ok, failed).",
+        "operationId": "post_panel_api_nodes_upgrade_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Node ID.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "description": "Release tag such as v1.2.3. Empty means the latest release."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
                   }
                 }
               }

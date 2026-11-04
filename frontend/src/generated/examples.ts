@@ -972,10 +972,19 @@ export const EXAMPLES: Record<string, unknown> = {
     "swapUsed": 0,
     "tcpSockets": 0,
     "udpSockets": 0,
+    "upgradeError": "",
+    "upgradeState": "requested",
+    "upgradeVersion": "v1.2.3",
     "uptimeSecs": 0,
     "xrayError": "",
     "xrayState": "not_configured",
     "xrayVersion": "26.3.27"
+  },
+  "NodeReleases": {
+    "checkedAt": 1700000000,
+    "error": "",
+    "latest": "v1.2.3",
+    "repo": "dest1256/d256-node"
   },
   "NodeView": {
     "activeCount": 20,
