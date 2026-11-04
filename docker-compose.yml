@@ -37,6 +37,8 @@ services:
       XUI_CONN_RETENTION_DAYS: ${XUI_CONN_RETENTION_DAYS:-30}
       XUI_CONN_DAILY_RETENTION_DAYS: ${XUI_CONN_DAILY_RETENTION_DAYS:-365}
       XUI_TRAFFIC_RETENTION_DAYS: ${XUI_TRAFFIC_RETENTION_DAYS:-90}
+      # Where the panel looks for new node releases (change it if you run your own fork).
+      XUI_NODE_RELEASE_REPO: ${XUI_NODE_RELEASE_REPO:-dest1256/d256-node}
     networks:
       - caddy-net
 
