@@ -1,32 +1,45 @@
-# Panel + Caddy (automatic TLS). Copy .env.example to .env and set PANEL_DOMAIN.
+# d256 panel. Everything is built from GitHub; all data lives next to this file:
+#   ./db    SQLite database (x-ui.db), logs and the internal CA of the node link -- back this folder up
+#   ./cert  TLS certificates, if you want the panel to serve HTTPS itself (optional)
+#
+# Run:  docker compose up -d --build        Update:  docker compose up -d --build   (pulls the latest source)
+# The web UI (2053) and the subscriptions (2096) are reached through your reverse proxy on the network below,
+# e.g. in Caddy:   panel.example.com { reverse_proxy d256-panel:2053 }
+#                  panel.example.com:2096 { reverse_proxy d256-panel:2096 }
+# Nodes connect to port 8444 directly (gRPC + mTLS), so open it in the firewall.
 services:
-  panel:
-    build: .
-    image: d256-panel:local
-    restart: unless-stopped
+  init:
+    image: alpine:3.22
+    restart: "no"
+    command: chown -R 10001:10001 /data /app/cert
     volumes:
-      - panel-data:/data
+      - ./db:/data
+      - ./cert:/app/cert
+
+  d256-panel:
+    build:
+      # Use a tag or branch after '#', e.g. ...d256-panel.git#v1.0.0
+      context: ${D256_PANEL_SRC:-https://github.com/dest1256/d256-panel.git#main}
+    image: d256-panel:latest
+    container_name: d256-panel
+    restart: unless-stopped
+    depends_on:
+      init:
+        condition: service_completed_successfully
     ports:
-      # Node gRPC (mTLS) is served by the panel itself, not by Caddy.
       - "8444:8444"
-    expose:
-      - "2053"
-      - "2096"
-  caddy:
-    image: caddy:2
-    restart: unless-stopped
-    depends_on: [panel]
-    ports:
-      - "80:80"
-      - "443:443"
-      - "2096:2096"
-    environment:
-      PANEL_DOMAIN: ${PANEL_DOMAIN:?set PANEL_DOMAIN in .env}
     volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
-volumes:
-  panel-data:
-  caddy-data:
-  caddy-config:
+      - ./db:/data
+      - ./cert:/app/cert
+    environment:
+      TZ: ${TZ:-UTC}
+      XUI_CONN_RETENTION_DAYS: ${XUI_CONN_RETENTION_DAYS:-30}
+      XUI_CONN_DAILY_RETENTION_DAYS: ${XUI_CONN_DAILY_RETENTION_DAYS:-365}
+      XUI_TRAFFIC_RETENTION_DAYS: ${XUI_TRAFFIC_RETENTION_DAYS:-90}
+    networks:
+      - caddy-net
+
+networks:
+  caddy-net:
+    external: true
+    name: ${PROXY_NETWORK:-Caddy-net}

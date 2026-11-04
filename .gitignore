@@ -50,3 +50,6 @@ build/
 .cache/
 .smoke-client.json
 .demo-client.json
+db/
+cert/
+data/

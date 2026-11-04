@@ -15,27 +15,34 @@
 - **Импорт `x-ui.db`:** «Узлы → Импорт из x-ui.db» добавляет inbound'ы, клиентов и трафик из базы 3x-ui на выбранный узел. Существующее не заменяется; неподдерживаемые протоколы (MTProto, AmneziaWG, TUIC), дубликаты e-mail и занятые порты пропускаются с отчётом.
 
 ## Запуск
-Нужен только Docker.
+Нужен только Docker и уже работающий reverse proxy (например Caddy) в docker-сети `Caddy-net` (`docker network create Caddy-net`, если её ещё нет). Клонировать репозиторий не нужно: достаточно файла [docker-compose.yml](docker-compose.yml), панель собирается прямо с GitHub.
 ```
-cp .env.example .env     # задайте PANEL_DOMAIN
+mkdir panel && cd panel
+curl -O https://raw.githubusercontent.com/dest1256/d256-panel/main/docker-compose.yml
 docker compose up -d --build
 ```
-Панель — за Caddy (автоматический TLS на вашем домене). gRPC-порт для узлов `8444` панель слушает сама (откройте его в файрволе).
-Логин и пароль администратора создаются при первом старте и показываются один раз: `docker compose logs panel | grep Username`. Сменить: `docker compose exec panel /app/d256-panel setting -username ... -password ...`.
+Рядом с compose-файлом появятся папки: `db` (база, логи, внутренний CA — **их нужно бэкапить**) и `cert` (необязательные TLS-сертификаты). Имя сети можно поменять переменной `PROXY_NETWORK` (файл `.env`, пример — `.env.example`).
+В вашем Caddy добавьте (имя контейнера — `d256-panel`):
+```
+panel.example.com        { reverse_proxy d256-panel:2053 }
+panel.example.com:2096   { reverse_proxy d256-panel:2096 }   # подписки
+```
+Порт `8444` (gRPC для узлов) панель публикует сама, откройте его в файрволе.
+Логин и пароль администратора создаются при первом старте и показываются один раз: `docker compose logs d256-panel | grep Username`. Сменить: `docker compose exec d256-panel /app/d256-panel setting -username ... -password ...`.
 Подключение узла — в [README узла](https://github.com/dest1256/d256-node#readme).
 
 ### Переменные окружения
 | Переменная | По умолчанию | Назначение |
 |---|---|---|
-| `PANEL_DOMAIN` | — | домен панели для Caddy |
+| `PROXY_NETWORK` | `Caddy-net` | docker-сеть вашего reverse proxy |
 | `XUI_NODELINK_PORT` | `8444` | порт gRPC для узлов |
 | `XUI_CONN_RETENTION_DAYS` | `30` | сколько хранить почасовые данные по доменам/IP до свёртки в дневные |
 | `XUI_CONN_DAILY_RETENTION_DAYS` | `365` | сколько хранить дневные данные |
 | `XUI_TRAFFIC_RETENTION_DAYS` | `90` | сколько хранить данные графиков трафика |
 
 ## Обновление и бэкап
-Обновление: `git pull && docker compose up -d --build`; миграции БД выполняются при старте.
-Бэкап: том `panel-data` (`/data/x-ui.db`) — вся постоянная информация, включая внутренний CA. Потеряв том, придётся заново регистрировать все узлы.
+Обновление: `docker compose up -d --build` (подтянет свежий код с GitHub; для конкретной версии задайте `D256_PANEL_SRC=https://github.com/dest1256/d256-panel.git#v1.0.0`); миграции БД выполняются при старте.
+Бэкап: папка `db` — вся постоянная информация, включая внутренний CA. Потеряв её, придётся заново регистрировать все узлы.
 
 ## Разработка и проверки (только Docker)
 ```
@@ -69,16 +76,18 @@ The 3x-ui UI is kept (look, navigation, dark theme, RU/EN), but the panel **does
 - **`x-ui.db` import:** *Nodes → Import from x-ui.db* adds the inbounds, clients and traffic of a 3x-ui database to the chosen node. Nothing existing is replaced; unsupported protocols (MTProto, AmneziaWG, TUIC), duplicate e-mails and busy ports are skipped and reported.
 
 ### Run
-Docker is the only requirement.
+Docker and an existing reverse proxy (e.g. Caddy) on the docker network `Caddy-net` are required. No clone needed: only [docker-compose.yml](docker-compose.yml); the panel is built from GitHub.
 ```
-cp .env.example .env     # set PANEL_DOMAIN
+mkdir panel && cd panel
+curl -O https://raw.githubusercontent.com/dest1256/d256-panel/main/docker-compose.yml
 docker compose up -d --build
 ```
-Caddy terminates TLS for the UI. The node gRPC port `8444` is served by the panel itself (open it in your firewall). The admin login is generated on first start and shown once: `docker compose logs panel | grep Username`; change it with `docker compose exec panel /app/d256-panel setting -username ... -password ...`. Connecting a node: see the node's README.
-Environment: `PANEL_DOMAIN`, `XUI_NODELINK_PORT` (8444), `XUI_CONN_RETENTION_DAYS` (30), `XUI_CONN_DAILY_RETENTION_DAYS` (365), `XUI_TRAFFIC_RETENTION_DAYS` (90).
+Next to the compose file you get `db` (database, logs, the internal CA — **back it up**) and `cert` (optional TLS certificates). The network name is `PROXY_NETWORK` (`.env`, see `.env.example`).
+In your Caddy: `panel.example.com { reverse_proxy d256-panel:2053 }` and `panel.example.com:2096 { reverse_proxy d256-panel:2096 }` (subscriptions). The node gRPC port `8444` is published by the panel itself (open it in your firewall). The admin login is generated on first start and shown once: `docker compose logs d256-panel | grep Username`; change it with `docker compose exec d256-panel /app/d256-panel setting -username ... -password ...`.
+Environment: `PROXY_NETWORK`, `XUI_NODELINK_PORT` (8444), `XUI_CONN_RETENTION_DAYS` (30), `XUI_CONN_DAILY_RETENTION_DAYS` (365), `XUI_TRAFFIC_RETENTION_DAYS` (90).
 
 ### Update and backup
-Update: `git pull && docker compose up -d --build` (DB migrations run on start). Backup: the `panel-data` volume (`/data/x-ui.db`) holds everything including the internal CA; if it is lost, every node must be enrolled again.
+Update: `docker compose up -d --build` (pulls the latest source; pin a version with `D256_PANEL_SRC=https://github.com/dest1256/d256-panel.git#v1.0.0`); DB migrations run on start. Backup: the `db` folder holds everything including the internal CA; if it is lost, every node must be enrolled again.
 
 ### Development and checks (Docker only)
 `./dev make verify`, `./dev make proto`, `make smoke` (panel + node + client), `make integration` (compose: panel + 2 nodes + 2 clients, outage and exactly-once redelivery). They use the images `d256-panel:local` / `d256-node:local` (`make image` in both repositories, side by side) and internet access.

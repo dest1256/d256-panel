@@ -28,7 +28,7 @@ RUN apk add --no-cache curl ca-certificates  && mkdir -p /geo && cd /geo  && cur
 
 FROM alpine:3.22
 RUN apk add --no-cache ca-certificates tzdata \
- && addgroup -S d256 && adduser -S -G d256 -h /app d256 \
+ && addgroup -S -g 10001 d256 && adduser -S -u 10001 -G d256 -h /app d256 \
  && mkdir -p /data && chown d256:d256 /data
 WORKDIR /app
 COPY --from=builder /out/d256-panel /app/d256-panel
