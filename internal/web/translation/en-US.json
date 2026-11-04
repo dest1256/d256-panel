@@ -1180,7 +1180,7 @@
       "xrayVersion": "Xray Version",
       "actions": "Actions",
       "deleteConfirmTitle": "Delete node \"{name}\"?",
-      "deleteConfirmContent": "This stops monitoring the node. The remote panel itself is unaffected.",
+      "deleteConfirmContent": "The node is removed and its certificate stops being accepted; the machine itself is not touched. A node that still has inbounds can only be deleted together with them.",
       "statusValues": {
         "online": "Online",
         "offline": "Offline",
@@ -1234,7 +1234,8 @@
       "importXuiFile": "Select x-ui.db",
       "importXuiDone": "Imported {{inbounds}} inbounds, {{clients}} clients",
       "importXuiSkipped": "Skipped",
-      "importXuiNode": "Target node"
+      "importXuiNode": "Target node",
+      "deleteWithInbounds": "Also delete the inbounds of this node and their clients"
     },
     "settings": {
       "defaultTag": "Default",

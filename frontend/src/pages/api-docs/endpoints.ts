@@ -1419,8 +1419,18 @@ export const sections: readonly Section[] = [
       {
         method: 'POST',
         path: '/panel/api/nodes/del/:id',
-        summary: 'Delete a node. Refused while inbounds are still attached to it.',
-        params: [{ name: 'id', in: 'path', type: 'number', desc: 'Node ID.' }],
+        summary:
+          'Delete a node. Refused while inbounds are still attached to it, unless withInbounds is true: then the node inbounds are deleted first.',
+        params: [
+          { name: 'id', in: 'path', type: 'number', desc: 'Node ID.' },
+          {
+            name: 'withInbounds',
+            in: 'body',
+            type: 'boolean',
+            desc: 'Also delete the inbounds of the node.',
+            optional: true,
+          },
+        ],
       },
       {
         method: 'POST',

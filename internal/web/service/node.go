@@ -338,6 +338,21 @@ func (s *NodeService) EnsureInboundTagAllowedTx(tx *gorm.DB, nodeID int, tag str
 		Updates(map[string]any{"inbound_tags": string(buf)}).Error
 }
 
+// DeleteWithInbounds removes the node's inbounds (and with them their clients' links) and then the node.
+func (s *NodeService) DeleteWithInbounds(id int) error {
+	var ids []int
+	if err := database.GetDB().Model(&model.Inbound{}).Where("node_id = ?", id).Pluck("id", &ids).Error; err != nil {
+		return err
+	}
+	var inbounds InboundService
+	for _, inboundID := range ids {
+		if _, err := inbounds.DelInbound(inboundID); err != nil {
+			return err
+		}
+	}
+	return s.Delete(id)
+}
+
 func (s *NodeService) Delete(id int) error {
 	db := database.GetDB()
 	// Refuse to delete a node that still owns inbounds: dropping the node row

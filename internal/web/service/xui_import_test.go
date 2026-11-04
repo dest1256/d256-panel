@@ -160,3 +160,29 @@ func TestImportXUIDBRejectsBadInput(t *testing.T) {
 		t.Fatal("an unknown node must be rejected")
 	}
 }
+
+func TestDeleteNodeWithInboundsRemovesThemFirst(t *testing.T) {
+	setupBulkDB(t)
+	node := &model.Node{Name: "gone", Address: "n.example", Enable: true, Status: "pending"}
+	database.GetDB().Create(node)
+	id := node.Id
+	database.GetDB().Create(&model.Inbound{
+		Remark: "a", Enable: true, Port: 31001, Protocol: model.VLESS, Tag: "a-31001", NodeID: &id,
+		Settings: `{"clients":[],"decryption":"none"}`, StreamSettings: `{"network":"tcp","security":"none"}`, Sniffing: `{}`,
+	})
+	var ns NodeService
+	if err := ns.Delete(id); err == nil {
+		t.Fatal("a node with inbounds must not be deleted by plain Delete")
+	}
+	if err := ns.DeleteWithInbounds(id); err != nil {
+		t.Fatal(err)
+	}
+	var left int64
+	database.GetDB().Model(&model.Inbound{}).Where("node_id = ?", id).Count(&left)
+	if left != 0 {
+		t.Fatal("inbounds were not removed")
+	}
+	if err := database.GetDB().First(&model.Node{}, id).Error; err == nil {
+		t.Fatal("the node still exists")
+	}
+}

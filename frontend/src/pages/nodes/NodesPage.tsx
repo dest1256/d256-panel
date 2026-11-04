@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Button,
+  Checkbox,
   Card,
   Col,
   ConfigProvider,
@@ -78,14 +79,22 @@ export default function NodesPage() {
 
   const onDelete = useCallback(
     (node: NodeRecord) => {
+      let withInbounds = false;
       modal.confirm({
         title: t('pages.nodes.deleteConfirmTitle', { name: node.name }),
-        content: t('pages.nodes.deleteConfirmContent'),
+        content: (
+          <>
+            <p>{t('pages.nodes.deleteConfirmContent')}</p>
+            <Checkbox onChange={(e) => (withInbounds = e.target.checked)}>
+              {t('pages.nodes.deleteWithInbounds')}
+            </Checkbox>
+          </>
+        ),
         okText: t('delete'),
         okType: 'danger',
         cancelText: t('cancel'),
         onOk: async () => {
-          const msg = await remove(node.id);
+          const msg = await remove(node.id, withInbounds);
           if (msg?.success) messageApi.success(t('pages.nodes.toasts.deleted'));
         },
       });

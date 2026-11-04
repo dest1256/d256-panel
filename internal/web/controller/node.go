@@ -144,7 +144,16 @@ func (a *NodeController) del(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := a.nodeService.Delete(id); err != nil {
+	// Optional: also remove the inbounds that still belong to the node.
+	opts := struct {
+		WithInbounds bool `json:"withInbounds" form:"withInbounds"`
+	}{}
+	_ = c.ShouldBind(&opts)
+	del := a.nodeService.Delete
+	if opts.WithInbounds {
+		del = a.nodeService.DeleteWithInbounds
+	}
+	if err := del(id); err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.nodes.toasts.delete"), err)
 		return
 	}

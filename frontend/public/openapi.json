@@ -9921,7 +9921,7 @@
         "tags": [
           "Nodes"
         ],
-        "summary": "Delete a node. Refused while inbounds are still attached to it.",
+        "summary": "Delete a node. Refused while inbounds are still attached to it, unless withInbounds is true: then the node inbounds are deleted first.",
         "operationId": "post_panel_api_nodes_del_id",
         "parameters": [
           {
@@ -9934,6 +9934,22 @@
             }
           }
         ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "withInbounds": {
+                    "type": "boolean",
+                    "description": "Also delete the inbounds of the node."
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",

@@ -1059,7 +1059,7 @@
       "xrayVersion": "Версия Xray",
       "actions": "Действия",
       "deleteConfirmTitle": "Удалить узел \"{name}\"?",
-      "deleteConfirmContent": "Это остановит мониторинг узла. Сама удалённая панель не будет затронута.",
+      "deleteConfirmContent": "Узел будет удалён, его сертификат перестанет приниматься; сам сервер не затрагивается. Узел с инбаундами можно удалить только вместе с ними.",
       "statusValues": {
         "online": "В сети",
         "offline": "Не в сети",
@@ -1113,7 +1113,8 @@
       "importXuiFile": "Выбрать x-ui.db",
       "importXuiDone": "Импортировано инбаундов: {{inbounds}}, клиентов: {{clients}}",
       "importXuiSkipped": "Пропущено",
-      "importXuiNode": "Узел назначения"
+      "importXuiNode": "Узел назначения",
+      "deleteWithInbounds": "Также удалить инбаунды этого узла и их клиентов"
     },
     "settings": {
       "defaultTag": "По умолчанию",
