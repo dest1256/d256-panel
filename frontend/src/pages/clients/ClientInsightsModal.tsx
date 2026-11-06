@@ -12,6 +12,7 @@ import {
   Table,
   Tabs,
   Tag,
+  Tooltip,
 } from 'antd';
 import type { TableColumnsType } from 'antd';
 import { DownloadOutlined } from '@ant-design/icons';
@@ -22,6 +23,8 @@ import Sparkline from '@/components/viz/Sparkline';
 import {
   useActiveConnections,
   useClientDestinations,
+  useClientHwidDevices,
+  NO_DEVICE,
   useClientDevices,
   useClientTraffic,
   type ActiveConnection,
@@ -59,6 +62,7 @@ export default function ClientInsightsModal({ open, email, onClose }: ClientInsi
   const [split, setSplit] = useState<'node' | 'inbound'>('node');
   const [search, setSearch] = useState('');
   const [nodeId, setNodeId] = useState<number | undefined>(undefined);
+  const [hwid, setHwid] = useState<string | undefined>(undefined);
   const [sort, setSort] = useState<DestinationsFilter['sort']>('total');
   const [order, setOrder] = useState<DestinationsFilter['order']>('desc');
 
@@ -73,8 +77,19 @@ export default function ClientInsightsModal({ open, email, onClose }: ClientInsi
   const dests = useClientDestinations(
     email,
     range,
-    { nodeId, q: search, sort, order },
+    { nodeId, hwid, q: search, sort, order },
     open && tab === 'destinations',
+  );
+  const deviceList = useClientHwidDevices(email, open && tab === 'destinations');
+  const deviceOptions = useMemo(
+    () => [
+      ...(deviceList.data ?? []).map((d) => ({
+        value: d.hwid,
+        label: `${d.label || d.short}${d.lastIp ? ` · ${d.lastIp}` : ''}`,
+      })),
+      { value: NO_DEVICE, label: t('pages.clients.insights.unknownDevice') },
+    ],
+    [deviceList.data, t],
   );
   // The node filter lists every node the client has traffic on.
   const nodeOptions = useMemo(() => {
@@ -220,6 +235,28 @@ export default function ClientInsightsModal({ open, email, onClose }: ClientInsi
     { title: t('pages.clients.insights.protocol'), dataIndex: 'network', width: 80 },
     { title: t('pages.clients.insights.node'), dataIndex: 'node' },
     {
+      title: t('pages.clients.insights.device'),
+      key: 'devices',
+      render: (_: unknown, r: DestinationRow) => {
+        const shown = r.devices.slice(0, 2);
+        return (
+          <Space size={4} wrap>
+            {shown.map((d) => (
+              <Tooltip
+                key={d.hwid || 'unknown'}
+                title={`${d.hwid ? d.short : t('pages.clients.insights.unknownDeviceHint')} · ↑ ${SizeFormatter.sizeFormat(d.up)} ↓ ${SizeFormatter.sizeFormat(d.down)}${d.lastSeen ? ` · ${dayjs.unix(d.lastSeen).format('YYYY-MM-DD HH:mm:ss')}` : ''}`}
+              >
+                <Tag color={d.hwid ? 'blue' : undefined}>
+                  {d.hwid ? d.label || d.short : t('pages.clients.insights.unknownDevice')}
+                </Tag>
+              </Tooltip>
+            ))}
+            {r.devices.length > shown.length && <Tag>+{r.devices.length - shown.length}</Tag>}
+          </Space>
+        );
+      },
+    },
+    {
       title: '↑',
       dataIndex: 'up',
       sorter: true,
@@ -246,6 +283,13 @@ export default function ClientInsightsModal({ open, email, onClose }: ClientInsi
       sorter: true,
       sortOrder: sort === 'conns' ? (order === 'asc' ? 'ascend' : 'descend') : null,
     },
+    {
+      title: t('pages.clients.insights.lastUsed'),
+      dataIndex: 'lastSeen',
+      sorter: true,
+      sortOrder: sort === 'last' ? (order === 'asc' ? 'ascend' : 'descend') : null,
+      render: (v: number) => (v > 0 ? dayjs.unix(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
   ];
 
   const destinationsTab = (
@@ -267,6 +311,15 @@ export default function ClientInsightsModal({ open, email, onClose }: ClientInsi
           options={nodeOptions}
           value={nodeId}
           onChange={(v) => setNodeId(v ?? undefined)}
+        />
+        <Select
+          allowClear
+          aria-label={t('pages.clients.insights.allDevices')}
+          placeholder={t('pages.clients.insights.allDevices')}
+          style={{ minWidth: 200 }}
+          options={deviceOptions}
+          value={hwid}
+          onChange={(v) => setHwid(v ?? undefined)}
         />
         <Button
           icon={<DownloadOutlined aria-hidden />}
@@ -295,7 +348,7 @@ export default function ClientInsightsModal({ open, email, onClose }: ClientInsi
         onChange={(_, __, sorter) => {
           const s = Array.isArray(sorter) ? sorter[0] : sorter;
           if (s?.field && s.order) {
-            setSort(s.field as DestinationsFilter['sort']);
+            setSort((s.field === 'lastSeen' ? 'last' : s.field) as DestinationsFilter['sort']);
             setOrder(s.order === 'ascend' ? 'asc' : 'desc');
           } else {
             setSort('total');

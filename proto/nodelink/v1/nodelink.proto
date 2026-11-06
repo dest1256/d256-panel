@@ -206,6 +206,11 @@ message ConnEntry {
   uint64 up = 6;
   uint64 down = 7;
   uint32 conns = 8;
+  // The client address the connections came from. The panel maps it to a device (HWID) by the address the
+  // device fetched its subscription from.
+  string source_ip = 9;
+  // The last moment (unix seconds) this client used this destination from this address.
+  int64 last_unix = 10;
 }
 
 message ActiveConn {

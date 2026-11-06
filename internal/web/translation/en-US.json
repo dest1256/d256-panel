@@ -990,7 +990,12 @@
         "noActive": "No active connections",
         "noDevices": "No devices seen recently",
         "period": "Period",
-        "split": "Split"
+        "split": "Split",
+        "device": "Device (HWID)",
+        "allDevices": "All devices",
+        "unknownDevice": "Unknown device",
+        "unknownDeviceHint": "The connection came from an address no device fetched the subscription from",
+        "lastUsed": "Last used"
       }
     },
     "groups": {

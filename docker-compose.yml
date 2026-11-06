@@ -1,8 +1,9 @@
-# d256 panel. Everything is built from GitHub; all data lives next to this file:
+# d256 panel. The image comes prebuilt from GitHub (ghcr.io); all data lives next to this file:
 #   ./db    SQLite database (x-ui.db), logs and the internal CA of the node link -- back this folder up
 #   ./cert  TLS certificates, if you want the panel to serve HTTPS itself (optional)
 #
-# Run:  docker compose up -d --build        Update:  docker compose up -d --build   (pulls the latest source)
+# Run:  docker compose up -d        Update:  docker compose pull && docker compose up -d
+# The image is built by GitHub Actions on every release and pulled from ghcr.io; nothing is built on the server.
 # The web UI (2053) and the subscriptions (2096) are reached through your reverse proxy on the network below,
 # e.g. in Caddy:   panel.example.com { reverse_proxy d256-panel:2053 }
 #                  panel.example.com:2096 { reverse_proxy d256-panel:2096 }
@@ -17,11 +18,10 @@ services:
       - ./cert:/app/cert
 
   d256-panel:
-    build:
-      # Use a tag or branch after '#', e.g. ...d256-panel.git#v1.0.0
-      context: ${D256_PANEL_SRC:-https://github.com/dest1256/d256-panel.git#main}
-    image: d256-panel:latest
-    pull_policy: build
+    # A prebuilt image from GitHub Actions: nothing is compiled on your server.
+    # Pin a version with D256_PANEL_TAG=v1.1.0 in .env; the default follows the latest release.
+    image: ghcr.io/dest1256/d256-panel:${D256_PANEL_TAG:-latest}
+    pull_policy: always
     container_name: d256-panel
     restart: unless-stopped
     depends_on:

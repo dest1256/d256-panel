@@ -1544,6 +1544,13 @@ export const sections: readonly Section[] = [
           },
           { name: 'nodeId', in: 'query', type: 'number', desc: 'Only this node.', optional: true },
           {
+            name: 'hwid',
+            in: 'query',
+            type: 'string',
+            desc: 'Only usage attributed to this device (hash from /hwids); "-" selects usage not attributed to any device.',
+            optional: true,
+          },
+          {
             name: 'q',
             in: 'query',
             type: 'string',
@@ -1554,7 +1561,7 @@ export const sections: readonly Section[] = [
             name: 'sort',
             in: 'query',
             type: 'string',
-            desc: 'dest, up, down, total or conns. Defaults to total.',
+            desc: 'dest, up, down, total, conns or last (last use). Defaults to total.',
             optional: true,
             defaultValue: 'total',
           },
@@ -1582,7 +1589,16 @@ export const sections: readonly Section[] = [
           },
         ],
         response:
-          '{\n  "success": true,\n  "obj": [\n    {"dest": "example.com", "network": "tcp", "nodeId": 1, "node": "de-fra-1", "up": 1200, "down": 56000, "conns": 3, "total": 57200}\n  ]\n}',
+          '{\n  "success": true,\n  "obj": [\n    {"dest": "example.com", "network": "tcp", "nodeId": 1, "node": "de-fra-1", "up": 1200, "down": 56000, "conns": 3, "total": 57200, "lastSeen": 1760000000, "devices": [{"hwid": "9f2c…", "short": "9f2c1ab4", "label": "Pixel 8 · Android 14", "up": 1200, "down": 56000, "lastSeen": 1760000000}]}\n  ]\n}',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/clientInsights/hwids',
+        summary:
+          'Devices (HWID) that fetched the client subscription, with the address each last fetched it from. VPN connections from that address are attributed to the device (an approximation: devices behind one public address cannot be told apart). Only the hash of the device id is stored.',
+        params: [{ name: 'email', in: 'query', type: 'string', desc: 'Client email.' }],
+        response:
+          '{\n  "success": true,\n  "obj": [\n    {"hwid": "9f2c…", "short": "9f2c1ab4", "label": "Pixel 8 · Android 14", "firstSeen": 1759000000, "lastSeen": 1760000000, "lastIp": "203.0.113.7"}\n  ]\n}',
       },
       {
         method: 'GET',

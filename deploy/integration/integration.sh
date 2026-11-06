@@ -26,6 +26,9 @@ done
 [ -n "$TOK" ] || { echo "panel did not start"; exit 1; }
 API="http://panel:2053/panel/api"
 json() { $C -H "Authorization: Bearer $TOK" -H 'Content-Type: application/json' "$@"; }
+# example.com does not answer with exactly the same number of bytes every time, so compare with a tolerance
+# that is far below one request (about 1 KB): a lost or doubled delivery would still be caught.
+near() { local d=$(( $1 - $2 )); [ "${d#-}" -le "${3:-60}" ]; }
 quote() { printf '%s' "$1" | sed 's/"/\\"/g; s/^/"/; s/$/"/'; }
 fail() { echo "FAIL: $*"; $DC logs --tail 15 2>&1 | tail -45; exit 1; }
 
@@ -88,7 +91,7 @@ sleep 6
 A=$(total_of alice@it); B=$(total_of bob@it)
 PER=$((A / 2))
 echo "alice=$A bob=$B bytes per request=$PER"
-[ "$PER" -gt 0 ] && [ "$A" = "$B" ] && [ $((PER * 2)) = "$A" ] || fail "accounting before the outage is wrong"
+[ "$PER" -gt 0 ] && near "$A" "$B" && near $((PER * 2)) "$A" || fail "accounting before the outage is wrong"
 
 echo "== per-destination accounting names the node"
 for who in "alice@it node1" "bob@it node2"; do
@@ -113,12 +116,12 @@ $DC start panel >/dev/null
 sleep 5
 for _ in $(seq 1 60); do
   A=$(total_of alice@it 2>/dev/null || echo 0); B=$(total_of bob@it 2>/dev/null || echo 0)
-  [ "$A" = $((PER * 5)) ] && [ "$B" = $((PER * 5)) ] && break
+  near "$A" $((PER * 5)) && near "$B" $((PER * 5)) && break
   sleep 1
 done
 sleep 12 # a duplicate delivery, if any, would show up now
 A=$(total_of alice@it); B=$(total_of bob@it)
 echo "alice=$A bob=$B expected=$((PER * 5)) each"
-[ "$A" = $((PER * 5)) ] && [ "$B" = $((PER * 5)) ] || fail "usage was lost or counted twice"
+near "$A" $((PER * 5)) && near "$B" $((PER * 5)) || fail "usage was lost or counted twice"
 
 echo "INTEGRATION OK"

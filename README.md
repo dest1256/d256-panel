@@ -12,15 +12,15 @@
 - **Учёт:** трафик по клиентам доставляется ровно один раз, в том числе после разрыва связи (журнал на узле). Лимиты трафика, срок и **лимит устройств** узел применяет сам, даже без панели.
 - **Обновление узлов в один клик:** на странице «Узлы» видно, что вышла новая версия узла (она включает Xray); «Обновить узел» просит узел скачать подписанный релиз, проверить подпись и перезапуститься. Настройка ключа подписи и выпуск релизов — в [README узла](https://github.com/dest1256/d256-node#readme).
 - **Подписки** раздаёт только панель, адреса в них — адреса узлов.
-- **Клиент → «i»:** графики трафика (1ч/24ч/7д/30д/свой период, по узлам и inbound'ам), активные подключения (IP, домен, порт, узел, inbound, байты, автообновление), домены и IP за период (сортировка, поиск, фильтр по узлу, CSV), устройства.
+- **Клиент → «i»:** графики трафика (1ч/24ч/7д/30д/свой период, по узлам и inbound'ам), активные подключения (IP, домен, порт, узел, inbound, байты, автообновление), домены и IP за период с **устройством (HWID)** и **временем последнего использования** (сортировка, поиск, фильтры по узлу и устройству, CSV), устройства. HWID сопоставляется по IP: устройство, получившее подписку с некоторого адреса, получает и трафик с этого адреса (приблизительно: устройства за одним внешним IP не различаются).
 - **Импорт `x-ui.db`:** «Узлы → Импорт из x-ui.db» добавляет inbound'ы, клиентов и трафик из базы 3x-ui на выбранный узел. Существующее не заменяется; неподдерживаемые протоколы (MTProto, AmneziaWG, TUIC), дубликаты e-mail и занятые порты пропускаются с отчётом.
 
 ## Запуск
-Нужен только Docker и уже работающий reverse proxy (например Caddy) в docker-сети `Caddy-net` (`docker network create Caddy-net`, если её ещё нет). Клонировать репозиторий не нужно: достаточно файла [docker-compose.yml](docker-compose.yml), панель собирается прямо с GitHub.
+Нужен только Docker и уже работающий reverse proxy (например Caddy) в docker-сети `Caddy-net` (`docker network create Caddy-net`, если её ещё нет). Клонировать репозиторий не нужно: достаточно файла [docker-compose.yml](docker-compose.yml): образ панели собирает GitHub Actions и публикует в `ghcr.io`, на сервере ничего не собирается.
 ```
 mkdir panel && cd panel
 curl -O https://raw.githubusercontent.com/dest1256/d256-panel/main/docker-compose.yml
-docker compose up -d --build
+docker compose up -d
 ```
 Рядом с compose-файлом появятся папки: `db` (база, логи, внутренний CA — **их нужно бэкапить**) и `cert` (необязательные TLS-сертификаты). Имя сети можно поменять переменной `PROXY_NETWORK` (файл `.env`, пример — `.env.example`).
 В вашем Caddy добавьте (имя контейнера — `d256-panel`):
@@ -43,7 +43,7 @@ panel.example.com:2096   { reverse_proxy d256-panel:2096 }   # подписки
 | `XUI_NODE_RELEASE_REPO` | `dest1256/d256-node` | репозиторий GitHub, в котором панель ищет новые версии узла |
 
 ## Обновление и бэкап
-Обновление: `docker compose up -d --build` (подтянет свежий код с GitHub; для конкретной версии задайте `D256_PANEL_SRC=https://github.com/dest1256/d256-panel.git#v1.0.0`); миграции БД выполняются при старте.
+Обновление: `docker compose pull && docker compose up -d` (подтянет последний релиз; чтобы закрепить версию, задайте `D256_PANEL_TAG=v1.1.0` в `.env`); миграции БД выполняются при старте.
 Бэкап: папка `db` — вся постоянная информация, включая внутренний CA. Потеряв её, придётся заново регистрировать все узлы.
 
 ## Разработка и проверки (только Docker)
@@ -76,22 +76,22 @@ The 3x-ui UI is kept (look, navigation, dark theme, RU/EN), but the panel **does
 - **Accounting:** per-client usage is delivered exactly once, also after an outage (journal on the node). Traffic quota, expiry and the **device limit** are enforced by the node itself, even offline.
 - **One-click node updates:** the Nodes page shows when a newer node release (it includes Xray) exists; "Update node" asks the node to download the signed release, verify the signature and restart. Key setup and releases are described in the node README.
 - **Subscriptions** are served by the panel only, with node addresses.
-- **Client → "i":** traffic charts (1h/24h/7d/30d/custom, by node and inbound), live connections (IP, domain, port, node, inbound, bytes, auto-refresh), domains and IPs per period (sort, search, node filter, CSV), devices.
+- **Client → "i":** traffic charts (1h/24h/7d/30d/custom, by node and inbound), live connections (IP, domain, port, node, inbound, bytes, auto-refresh), domains and IPs per period with the **device (HWID)** and the **last time of use** (sort, search, node and device filters, CSV), devices. A device is matched by address: traffic from the address a device fetched its subscription from is attributed to it (approximate: devices behind one public address cannot be told apart).
 - **`x-ui.db` import:** *Nodes → Import from x-ui.db* adds the inbounds, clients and traffic of a 3x-ui database to the chosen node. Nothing existing is replaced; unsupported protocols (MTProto, AmneziaWG, TUIC), duplicate e-mails and busy ports are skipped and reported.
 
 ### Run
-Docker and an existing reverse proxy (e.g. Caddy) on the docker network `Caddy-net` are required. No clone needed: only [docker-compose.yml](docker-compose.yml); the panel is built from GitHub.
+Docker and an existing reverse proxy (e.g. Caddy) on the docker network `Caddy-net` are required. No clone and no build: only [docker-compose.yml](docker-compose.yml); the image is built by GitHub Actions and pulled from `ghcr.io`.
 ```
 mkdir panel && cd panel
 curl -O https://raw.githubusercontent.com/dest1256/d256-panel/main/docker-compose.yml
-docker compose up -d --build
+docker compose up -d
 ```
 Next to the compose file you get `db` (database, logs, the internal CA — **back it up**) and `cert` (optional TLS certificates). The network name is `PROXY_NETWORK` (`.env`, see `.env.example`).
 In your Caddy: `panel.example.com { reverse_proxy d256-panel:2053 }` and `panel.example.com:2096 { reverse_proxy d256-panel:2096 }` (subscriptions). The node gRPC port `8444` is published by the panel itself (open it in your firewall). The admin login is generated on first start and shown once: `docker compose logs d256-panel | grep Username`; change it with `docker compose exec d256-panel /app/d256-panel setting -username ... -password ...`.
 Environment: `PROXY_NETWORK`, `XUI_NODELINK_PORT` (8444), `XUI_CONN_RETENTION_DAYS` (30), `XUI_CONN_DAILY_RETENTION_DAYS` (365), `XUI_TRAFFIC_RETENTION_DAYS` (90).
 
 ### Update and backup
-Update: `docker compose up -d --build` (pulls the latest source; pin a version with `D256_PANEL_SRC=https://github.com/dest1256/d256-panel.git#v1.0.0`); DB migrations run on start. Backup: the `db` folder holds everything including the internal CA; if it is lost, every node must be enrolled again.
+Update: `docker compose pull && docker compose up -d` (pulls the latest release; pin a version with `D256_PANEL_TAG=v1.1.0` in `.env`); DB migrations run on start. Backup: the `db` folder holds everything including the internal CA; if it is lost, every node must be enrolled again.
 
 ### Development and checks (Docker only)
 `./dev make verify`, `./dev make proto`, `make smoke` (panel + node + client), `make integration` (compose: panel + 2 nodes + 2 clients, outage and exactly-once redelivery). They use the images `d256-panel:local` / `d256-node:local` (`make image` in both repositories, side by side) and internet access.

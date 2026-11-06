@@ -54,6 +54,7 @@ func migrationModels() []any {
 		&model.ClientRecord{},
 		&model.ClientInbound{},
 		&model.ClientHwid{},
+		&model.ClientHwidIP{},
 		&model.ClientExternalLink{},
 		&model.ClientGroup{},
 		&model.InboundFallback{},

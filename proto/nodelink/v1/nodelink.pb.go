@@ -1663,12 +1663,17 @@ type ConnEntry struct {
 	Email      string                 `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
 	InboundTag string                 `protobuf:"bytes,2,opt,name=inbound_tag,json=inboundTag,proto3" json:"inbound_tag,omitempty"`
 	// The sniffed domain when the core knows it, otherwise the destination IP.
-	Dest          string `protobuf:"bytes,3,opt,name=dest,proto3" json:"dest,omitempty"`
-	Network       string `protobuf:"bytes,4,opt,name=network,proto3" json:"network,omitempty"`                    // tcp | udp
-	HourUnix      int64  `protobuf:"varint,5,opt,name=hour_unix,json=hourUnix,proto3" json:"hour_unix,omitempty"` // start of the hour
-	Up            uint64 `protobuf:"varint,6,opt,name=up,proto3" json:"up,omitempty"`
-	Down          uint64 `protobuf:"varint,7,opt,name=down,proto3" json:"down,omitempty"`
-	Conns         uint32 `protobuf:"varint,8,opt,name=conns,proto3" json:"conns,omitempty"`
+	Dest     string `protobuf:"bytes,3,opt,name=dest,proto3" json:"dest,omitempty"`
+	Network  string `protobuf:"bytes,4,opt,name=network,proto3" json:"network,omitempty"`                    // tcp | udp
+	HourUnix int64  `protobuf:"varint,5,opt,name=hour_unix,json=hourUnix,proto3" json:"hour_unix,omitempty"` // start of the hour
+	Up       uint64 `protobuf:"varint,6,opt,name=up,proto3" json:"up,omitempty"`
+	Down     uint64 `protobuf:"varint,7,opt,name=down,proto3" json:"down,omitempty"`
+	Conns    uint32 `protobuf:"varint,8,opt,name=conns,proto3" json:"conns,omitempty"`
+	// The client address the connections came from. The panel maps it to a device (HWID) by the address the
+	// device fetched its subscription from.
+	SourceIp string `protobuf:"bytes,9,opt,name=source_ip,json=sourceIp,proto3" json:"source_ip,omitempty"`
+	// The last moment (unix seconds) this client used this destination from this address.
+	LastUnix      int64 `protobuf:"varint,10,opt,name=last_unix,json=lastUnix,proto3" json:"last_unix,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1755,6 +1760,20 @@ func (x *ConnEntry) GetDown() uint64 {
 func (x *ConnEntry) GetConns() uint32 {
 	if x != nil {
 		return x.Conns
+	}
+	return 0
+}
+
+func (x *ConnEntry) GetSourceIp() string {
+	if x != nil {
+		return x.SourceIp
+	}
+	return ""
+}
+
+func (x *ConnEntry) GetLastUnix() int64 {
+	if x != nil {
+		return x.LastUnix
 	}
 	return 0
 }
@@ -2235,7 +2254,7 @@ const file_nodelink_v1_nodelink_proto_rawDesc = "" +
 	"\x0eLimitsSnapshot\x12\x1d\n" +
 	"\n" +
 	"taken_unix\x18\x01 \x01(\x03R\ttakenUnix\x127\n" +
-	"\aclients\x18\x02 \x03(\v2\x1d.d256.nodelink.v1.ClientLimitR\aclients\"\xc7\x01\n" +
+	"\aclients\x18\x02 \x03(\v2\x1d.d256.nodelink.v1.ClientLimitR\aclients\"\x81\x02\n" +
 	"\tConnEntry\x12\x14\n" +
 	"\x05email\x18\x01 \x01(\tR\x05email\x12\x1f\n" +
 	"\vinbound_tag\x18\x02 \x01(\tR\n" +
@@ -2245,7 +2264,10 @@ const file_nodelink_v1_nodelink_proto_rawDesc = "" +
 	"\thour_unix\x18\x05 \x01(\x03R\bhourUnix\x12\x0e\n" +
 	"\x02up\x18\x06 \x01(\x04R\x02up\x12\x12\n" +
 	"\x04down\x18\a \x01(\x04R\x04down\x12\x14\n" +
-	"\x05conns\x18\b \x01(\rR\x05conns\"\xe5\x01\n" +
+	"\x05conns\x18\b \x01(\rR\x05conns\x12\x1b\n" +
+	"\tsource_ip\x18\t \x01(\tR\bsourceIp\x12\x1b\n" +
+	"\tlast_unix\x18\n" +
+	" \x01(\x03R\blastUnix\"\xe5\x01\n" +
 	"\n" +
 	"ActiveConn\x12\x14\n" +
 	"\x05email\x18\x01 \x01(\tR\x05email\x12\x1f\n" +

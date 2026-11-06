@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"net"
 	"strings"
 	"time"
 
@@ -377,4 +378,22 @@ func clearClientHwidsBySubIDTx(tx *gorm.DB, subIDs ...string) error {
 		}
 	}
 	return nil
+}
+
+// RecordHwidIP remembers the public address a device (HWID) fetched its subscription from, so that VPN
+// connections from that address can be attributed to the device. Best effort: it never fails a request.
+func (s *ClientService) RecordHwidIP(subID, rawHwid, ip string) {
+	subID = strings.TrimSpace(subID)
+	hwid := strings.TrimSpace(rawHwid)
+	addr := net.ParseIP(strings.TrimSpace(ip))
+	if subID == "" || len(hwid) < minHwidLength || addr == nil {
+		return
+	}
+	err := database.GetDB().Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "sub_id"}, {Name: "hwid_hash"}, {Name: "ip"}},
+		DoUpdates: clause.AssignmentColumns([]string{"last_seen"}),
+	}).Create(&model.ClientHwidIP{SubID: subID, HwidHash: hashHwid(hwid), IP: addr.String(), LastSeen: time.Now().UnixMilli()}).Error
+	if err != nil {
+		logger.Warning("remember the address of a device failed:", err)
+	}
 }

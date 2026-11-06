@@ -25,7 +25,7 @@
 mkdir node && cd node
 curl -O https://raw.githubusercontent.com/dest1256/d256-node/main/docker-compose.yml
 echo 'ТОКЕН' | docker compose run --rm -T d256-node enroll https://panel.example.com/<путь-панели>/ -
-docker compose up -d --build
+docker compose up -d
 ```
 Правила для адреса в `enroll`:
 - Берите **публичный адрес панели из браузера**, вместе с веб-путём (`webBasePath`), если он не `/`. Например `https://panel.example.com/mjhdftghjdhjdcfhmxcdis/`.
@@ -73,7 +73,7 @@ The node dials the panel (outbound gRPC + mTLS). Connecting = enrolling with a o
    mkdir node && cd node
    curl -O https://raw.githubusercontent.com/dest1256/d256-node/main/docker-compose.yml
    echo 'TOKEN' | docker compose run --rm -T d256-node enroll https://panel.example.com/<panel-base-path>/ -
-   docker compose up -d --build
+   docker compose up -d
    ```
    Use the panel's public URL **including its web base path** (it is also the host the node later dials on `:8444`). Pass the token via stdin, not as an argument.
 3. **Check:** the node turns "online" in the panel; `docker compose logs -f d256-node`, `docker compose exec d256-node d256-node status`.

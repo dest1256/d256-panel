@@ -21,6 +21,7 @@ func NewClientInsightsController(g *gin.RouterGroup) *ClientInsightsController {
 	g.GET("/connections", a.connections)
 	g.GET("/devices", a.devices)
 	g.GET("/destinations", a.destinations)
+	g.GET("/hwids", a.hwids)
 	g.GET("/traffic", a.traffic)
 	return a
 }
@@ -115,7 +116,7 @@ func (a *ClientInsightsController) destinations(c *gin.Context) {
 		return
 	}
 	rows, err := nodelink.Destinations(nodelink.DestQuery{
-		Email: email, From: from, To: to, NodeID: int(queryInt(c, "nodeId")), Search: c.Query("q"),
+		Email: email, From: from, To: to, NodeID: int(queryInt(c, "nodeId")), Hwid: strings.TrimSpace(c.Query("hwid")), Search: c.Query("q"),
 		Sort: c.Query("sort"), Desc: c.Query("order") != "asc", Limit: int(queryInt(c, "limit")),
 	})
 	if err != nil {
@@ -130,11 +131,12 @@ func (a *ClientInsightsController) destinations(c *gin.Context) {
 	c.Header("X-Content-Type-Options", "nosniff")
 	c.Header("Content-Disposition", `attachment; filename="destinations.csv"`)
 	w := csv.NewWriter(c.Writer)
-	_ = w.Write([]string{"destination", "network", "node", "upload_bytes", "download_bytes", "total_bytes", "connections"})
+	_ = w.Write([]string{"destination", "network", "node", "upload_bytes", "download_bytes", "total_bytes", "connections", "last_used_utc", "devices"})
 	for _, r := range rows {
 		_ = w.Write([]string{
 			csvSafe(r.Dest), r.Network, csvSafe(r.Node),
 			strconv.FormatInt(r.Up, 10), strconv.FormatInt(r.Down, 10), strconv.FormatInt(r.Total, 10), strconv.FormatInt(r.Conns, 10),
+			lastUsed(r.LastSeen), csvSafe(deviceNames(r.Devices)),
 		})
 	}
 	w.Flush()
@@ -160,4 +162,37 @@ func (a *ClientInsightsController) traffic(c *gin.Context) {
 	}
 	res, err := nodelink.Traffic(email, from, to, step)
 	jsonObj(c, res, err)
+}
+
+func lastUsed(unix int64) string {
+	if unix <= 0 {
+		return ""
+	}
+	return time.Unix(unix, 0).UTC().Format(time.RFC3339)
+}
+
+// deviceNames lists the devices of a row for the CSV: a label when known, else the short id.
+func deviceNames(ds []nodelink.DestDevice) string {
+	names := make([]string, 0, len(ds))
+	for _, d := range ds {
+		switch {
+		case d.Label != "":
+			names = append(names, d.Label+" ("+d.Short+")")
+		case d.Short != "":
+			names = append(names, d.Short)
+		default:
+			names = append(names, "unknown")
+		}
+	}
+	return strings.Join(names, "; ")
+}
+
+// hwids lists the devices (HWIDs) that fetched the client's subscription, for the device filter.
+func (a *ClientInsightsController) hwids(c *gin.Context) {
+	email, ok := emailParam(c)
+	if !ok {
+		return
+	}
+	devices, err := nodelink.ClientDevices(email)
+	jsonObj(c, devices, err)
 }

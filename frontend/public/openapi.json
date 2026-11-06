@@ -10406,6 +10406,15 @@
             }
           },
           {
+            "name": "hwid",
+            "in": "query",
+            "required": false,
+            "description": "Only usage attributed to this device (hash from /hwids); \"-\" selects usage not attributed to any device.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "q",
             "in": "query",
             "required": false,
@@ -10418,7 +10427,7 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "dest, up, down, total or conns. Defaults to total.",
+            "description": "dest, up, down, total, conns or last (last use). Defaults to total.",
             "schema": {
               "type": "string",
               "default": "total"
@@ -10481,7 +10490,72 @@
                       "up": 1200,
                       "down": 56000,
                       "conns": 3,
-                      "total": 57200
+                      "total": 57200,
+                      "lastSeen": 1760000000,
+                      "devices": [
+                        {
+                          "hwid": "9f2c…",
+                          "short": "9f2c1ab4",
+                          "label": "Pixel 8 · Android 14",
+                          "up": 1200,
+                          "down": 56000,
+                          "lastSeen": 1760000000
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/clientInsights/hwids": {
+      "get": {
+        "tags": [
+          "Client insights"
+        ],
+        "summary": "Devices (HWID) that fetched the client subscription, with the address each last fetched it from. VPN connections from that address are attributed to the device (an approximation: devices behind one public address cannot be told apart). Only the hash of the device id is stored.",
+        "operationId": "get_panel_api_clientInsights_hwids",
+        "parameters": [
+          {
+            "name": "email",
+            "in": "query",
+            "required": true,
+            "description": "Client email.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": [
+                    {
+                      "hwid": "9f2c…",
+                      "short": "9f2c1ab4",
+                      "label": "Pixel 8 · Android 14",
+                      "firstSeen": 1759000000,
+                      "lastSeen": 1760000000,
+                      "lastIp": "203.0.113.7"
                     }
                   ]
                 }

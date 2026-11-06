@@ -32,6 +32,9 @@ done
 API="http://$PANEL:2053/panel/api"
 AUTH="Authorization: Bearer $TOK"
 json() { $C -H "$AUTH" -H 'Content-Type: application/json' "$@"; }
+# example.com does not answer with exactly the same number of bytes every time, so compare with a tolerance
+# that is far below one request (about 1 KB): a lost or doubled delivery would still be caught.
+near() { local d=$(( $1 - $2 )); [ "${d#-}" -le "${3:-60}" ]; }
 quote() { printf '%s' "$1" | sed 's/"/\\"/g; s/^/"/; s/$/"/'; }
 
 echo "== create node"
@@ -140,7 +143,7 @@ sum_traffic() { json $API/inbounds/list | grep -o '"email":"alice@smoke"[^}]*' |
 sleep 7
 BEFORE=$(sum_traffic)
 PER_REQUEST=$((BEFORE / 3))
-[ $((PER_REQUEST * 3)) = "$BEFORE" ] || { echo "unexpected traffic before the outage: $BEFORE"; exit 1; }
+[ "$PER_REQUEST" -gt 0 ] || { echo "unexpected traffic before the outage: $BEFORE"; exit 1; }
 echo "bytes per request: $PER_REQUEST (3 requests so far)"
 docker stop $PANEL >/dev/null
 sleep 3
@@ -166,7 +169,26 @@ echo "alice total: before=$BEFORE after-reconnect=$AFTER final=$FINAL"
 [ "$AFTER" -gt "$BEFORE" ] || { echo "OFFLINE DELIVERY FAILED: nothing arrived"; docker logs $NODE 2>&1 | tail -10; exit 1; }
 # six requests went through in total (2 + 1 + 3 offline): nothing lost, nothing counted twice
 EXPECTED=$((6 * PER_REQUEST))
-[ "$FINAL" = "$EXPECTED" ] || { echo "ACCOUNTING MISMATCH: got $FINAL, expected $EXPECTED"; exit 1; }
+near "$FINAL" "$EXPECTED" || { echo "ACCOUNTING MISMATCH: got $FINAL, expected $EXPECTED"; exit 1; }
 docker exec $NODE /usr/local/bin/d256-node status | grep -E "journal"
+
+echo "== usage is attributed to the device that fetched the subscription from the same address"
+HW=smoke-device-0001
+HW8=$(printf '%s' "$HW" | sha256sum | cut -c1-8)
+docker exec $CLIENT wget -q -O /dev/null --header="X-HWID: $HW" --header="X-Device-Model: SmokePhone" "http://$PANEL:2096${SUBPATH}smokesub1" || { echo "DEVICE FETCH FAILED"; exit 1; }
+for n in 1 2; do
+  docker run --rm --network $NET curlimages/curl -s -o /dev/null --max-time 20 -x socks5h://$CLIENT:1080 http://example.com/ || true
+done
+DEVS=""
+for i in $(seq 1 30); do
+  DEVS=$(json -G --data-urlencode "email=alice@smoke" --data-urlencode period=1h $API/clientInsights/destinations)
+  echo "$DEVS" | grep -q '"short":"'$HW8'"' && break
+  sleep 1
+done
+echo "$DEVS" | head -c 500; echo
+echo "$DEVS" | grep -q '"short":"'$HW8'"' || { echo "DEVICE ATTRIBUTION FAILED"; exit 1; }
+echo "$DEVS" | grep -q '"label":"SmokePhone"' || { echo "DEVICE LABEL MISSING"; exit 1; }
+echo "$DEVS" | grep -qE '"lastSeen":[1-9][0-9]{9}' || { echo "LAST USE MISSING"; exit 1; }
+json -G --data-urlencode "email=alice@smoke" $API/clientInsights/hwids | grep -q '"lastIp":"[0-9a-f.:]\+"' || { echo "DEVICE LIST FAILED"; exit 1; }
 
 echo "SMOKE OK"

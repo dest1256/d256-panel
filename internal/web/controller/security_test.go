@@ -82,6 +82,7 @@ var newRoutes = []struct{ method, path string }{
 	{"GET", "/panel/api/clientInsights/connections?email=a@x"},
 	{"GET", "/panel/api/clientInsights/devices?email=a@x"},
 	{"GET", "/panel/api/clientInsights/destinations?email=a@x"},
+	{"GET", "/panel/api/clientInsights/hwids?email=a@x"},
 	{"GET", "/panel/api/clientInsights/traffic?email=a@x"},
 	{"GET", "/panel/api/nodes/list"},
 	{"POST", "/panel/api/nodes/create"},

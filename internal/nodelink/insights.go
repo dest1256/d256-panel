@@ -16,16 +16,28 @@ const (
 	maxSeriesPoints    = 2000
 )
 
+// DestDevice is the part of a destination's usage that was attributed to one device.
+type DestDevice struct {
+	Hwid     string `json:"hwid"`  // hash of the device id; "" when the device could not be determined
+	Short    string `json:"short"` // first characters of the hash, for display
+	Label    string `json:"label"` // device model / OS when the device is known
+	Up       int64  `json:"up"`
+	Down     int64  `json:"down"`
+	LastSeen int64  `json:"lastSeen"`
+}
+
 // DestRow is the usage of a client towards one destination over a period.
 type DestRow struct {
-	Dest    string `json:"dest"`
-	Network string `json:"network"`
-	NodeID  int    `json:"nodeId"`
-	Node    string `json:"node"`
-	Up      int64  `json:"up"`
-	Down    int64  `json:"down"`
-	Conns   int64  `json:"conns"`
-	Total   int64  `json:"total"`
+	Dest     string       `json:"dest"`
+	Network  string       `json:"network"`
+	NodeID   int          `json:"nodeId"`
+	Node     string       `json:"node"`
+	Up       int64        `json:"up"`
+	Down     int64        `json:"down"`
+	Conns    int64        `json:"conns"`
+	Total    int64        `json:"total"`
+	LastSeen int64        `json:"lastSeen"` // unix seconds of the latest use
+	Devices  []DestDevice `json:"devices"`
 }
 
 // DestQuery selects destination usage. From/To are unix seconds (To exclusive).
@@ -33,12 +45,16 @@ type DestQuery struct {
 	Email  string
 	From   int64
 	To     int64
-	NodeID int // 0 = all nodes
+	NodeID int    // 0 = all nodes
+	Hwid   string // "" = every device, NoDevice = only usage that could not be attributed to a device
 	Search string
-	Sort   string // dest | up | down | total | conns
+	Sort   string // dest | up | down | total | conns | last
 	Desc   bool
 	Limit  int
 }
+
+// NoDevice selects usage that was not attributed to any device.
+const NoDevice = "-"
 
 func nodeNames() map[int]string {
 	var nodes []model.Node
@@ -57,7 +73,70 @@ func escapeLike(s string) string {
 	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
 }
 
-// Destinations sums hourly and rolled-up daily rows per destination.
+// DeviceInfo describes a device of a client's subscription.
+type DeviceInfo struct {
+	Hwid      string `json:"hwid"`
+	Short     string `json:"short"`
+	Label     string `json:"label"`
+	FirstSeen int64  `json:"firstSeen"` // unix seconds
+	LastSeen  int64  `json:"lastSeen"`
+	LastIP    string `json:"lastIp"` // the address it last fetched the subscription from
+}
+
+func shortHwid(h string) string {
+	if len(h) > 8 {
+		return h[:8]
+	}
+	return h
+}
+
+func deviceLabel(m model.ClientHwid) string {
+	parts := make([]string, 0, 2)
+	if m.DeviceModel != "" {
+		parts = append(parts, m.DeviceModel)
+	}
+	if m.DeviceOS != "" {
+		os := m.DeviceOS
+		if m.OsVersion != "" {
+			os += " " + m.OsVersion
+		}
+		parts = append(parts, os)
+	}
+	return strings.Join(parts, " · ")
+}
+
+// ClientDevices lists the devices that fetched the subscription of a client (by e-mail).
+func ClientDevices(email string) ([]DeviceInfo, error) {
+	var sub string
+	if err := database.GetDB().Model(&model.ClientRecord{}).Where("email = ?", email).Limit(1).Pluck("sub_id", &sub).Error; err != nil {
+		return nil, err
+	}
+	out := []DeviceInfo{}
+	if sub == "" {
+		return out, nil
+	}
+	var rows []model.ClientHwid
+	if err := database.GetDB().Where("sub_id = ?", sub).Order("last_seen DESC").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	var ips []model.ClientHwidIP
+	_ = database.GetDB().Where("sub_id = ?", sub).Order("last_seen DESC").Find(&ips).Error
+	lastIP := map[string]string{}
+	for _, ip := range ips {
+		if _, ok := lastIP[ip.HwidHash]; !ok {
+			lastIP[ip.HwidHash] = ip.IP
+		}
+	}
+	for _, r := range rows {
+		out = append(out, DeviceInfo{
+			Hwid: r.HwidHash, Short: shortHwid(r.HwidHash), Label: deviceLabel(r),
+			FirstSeen: r.FirstSeen / 1000, LastSeen: r.LastSeen / 1000, LastIP: lastIP[r.HwidHash],
+		})
+	}
+	return out, nil
+}
+
+// Destinations sums hourly and rolled-up daily rows per destination and attributes the usage to devices.
 func Destinations(q DestQuery) ([]DestRow, error) {
 	if q.Email == "" {
 		return nil, errors.New("email is required")
@@ -74,25 +153,72 @@ func Destinations(q DestQuery) ([]DestRow, error) {
 		filter += " AND node_id = ?"
 		args = append(args, q.NodeID)
 	}
+	switch {
+	case q.Hwid == NoDevice:
+		filter += " AND hwid = ''"
+	case q.Hwid != "":
+		filter += " AND hwid = ?"
+		args = append(args, q.Hwid)
+	}
 	if s := strings.ToLower(strings.TrimSpace(q.Search)); s != "" {
 		filter += ` AND dest LIKE ? ESCAPE '\'`
 		args = append(args, "%"+escapeLike(s)+"%")
 	}
 	// Daily rows count when their day starts inside the period; hourly rows when their hour does.
-	query := `SELECT dest, network, node_id, SUM(up) AS up, SUM(down) AS down, SUM(conns) AS conns FROM (
-		SELECT dest, network, node_id, up, down, conns FROM conn_stats_hourly WHERE email = ? AND hour >= ? AND hour < ?` + filter + `
+	query := `SELECT dest, network, node_id, hwid, SUM(up) AS up, SUM(down) AS down, SUM(conns) AS conns, MAX(last_seen) AS last_seen FROM (
+		SELECT dest, network, node_id, hwid, up, down, conns, last_seen FROM conn_stats_hourly WHERE email = ? AND hour >= ? AND hour < ?` + filter + `
 		UNION ALL
-		SELECT dest, network, node_id, up, down, conns FROM conn_stats_daily WHERE email = ? AND day >= ? AND day < ?` + filter + `
-	) GROUP BY dest, network, node_id`
+		SELECT dest, network, node_id, hwid, up, down, conns, last_seen FROM conn_stats_daily WHERE email = ? AND day >= ? AND day < ?` + filter + `
+	) GROUP BY dest, network, node_id, hwid`
 	all := append(append([]any{}, args...), args...)
-	var rows []DestRow
-	if err := database.GetDB().Raw(query, all...).Scan(&rows).Error; err != nil {
+	var raw []struct {
+		Dest     string
+		Network  string
+		NodeID   int
+		Hwid     string
+		Up       int64
+		Down     int64
+		Conns    int64
+		LastSeen int64
+	}
+	if err := database.GetDB().Raw(query, all...).Scan(&raw).Error; err != nil {
 		return nil, err
 	}
 	names := nodeNames()
+	devices, _ := ClientDevices(q.Email)
+	labels := make(map[string]string, len(devices))
+	for _, d := range devices {
+		labels[d.Hwid] = d.Label
+	}
+
+	type rowKey struct {
+		dest, network string
+		node          int
+	}
+	index := map[rowKey]int{}
+	var rows []DestRow
+	for _, r := range raw {
+		k := rowKey{r.Dest, r.Network, r.NodeID}
+		i, ok := index[k]
+		if !ok {
+			i = len(rows)
+			index[k] = i
+			rows = append(rows, DestRow{Dest: r.Dest, Network: r.Network, NodeID: r.NodeID, Node: names[r.NodeID], Devices: []DestDevice{}})
+		}
+		row := &rows[i]
+		row.Up += r.Up
+		row.Down += r.Down
+		row.Conns += r.Conns
+		row.LastSeen = max(row.LastSeen, r.LastSeen)
+		row.Devices = append(row.Devices, DestDevice{
+			Hwid: r.Hwid, Short: shortHwid(r.Hwid), Label: labels[r.Hwid], Up: r.Up, Down: r.Down, LastSeen: r.LastSeen,
+		})
+	}
 	for i := range rows {
-		rows[i].Node = names[rows[i].NodeID]
 		rows[i].Total = rows[i].Up + rows[i].Down
+		sort.Slice(rows[i].Devices, func(a, b int) bool {
+			return rows[i].Devices[a].Up+rows[i].Devices[a].Down > rows[i].Devices[b].Up+rows[i].Devices[b].Down
+		})
 	}
 	less := func(a, b DestRow) bool { return a.Total < b.Total }
 	switch q.Sort {
@@ -104,6 +230,8 @@ func Destinations(q DestQuery) ([]DestRow, error) {
 		less = func(a, b DestRow) bool { return a.Down < b.Down }
 	case "conns":
 		less = func(a, b DestRow) bool { return a.Conns < b.Conns }
+	case "last":
+		less = func(a, b DestRow) bool { return a.LastSeen < b.LastSeen }
 	}
 	sort.SliceStable(rows, func(i, j int) bool {
 		if q.Desc {

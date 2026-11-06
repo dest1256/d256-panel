@@ -7,6 +7,13 @@ function csvCell(value: string | number): string {
   return /[",\n\r]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
 }
 
+// Short text for the devices of a row: the label when known, else the start of the id.
+export function deviceNames(r: DestinationRow): string {
+  return (r.devices ?? [])
+    .map((d) => (d.label ? `${d.label} (${d.short})` : d.short || 'unknown'))
+    .join('; ');
+}
+
 export function destinationsToCsv(rows: DestinationRow[]): string {
   const head = [
     'destination',
@@ -16,10 +23,17 @@ export function destinationsToCsv(rows: DestinationRow[]): string {
     'download_bytes',
     'total_bytes',
     'connections',
+    'last_used_utc',
+    'devices',
   ];
   const lines = [head.join(',')];
   for (const r of rows) {
-    lines.push([r.dest, r.network, r.node, r.up, r.down, r.total, r.conns].map(csvCell).join(','));
+    const lastUsed = r.lastSeen > 0 ? new Date(r.lastSeen * 1000).toISOString() : '';
+    lines.push(
+      [r.dest, r.network, r.node, r.up, r.down, r.total, r.conns, lastUsed, deviceNames(r)]
+        .map(csvCell)
+        .join(','),
+    );
   }
   return lines.join('\r\n') + '\r\n';
 }

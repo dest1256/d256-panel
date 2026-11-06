@@ -23,6 +23,16 @@ export interface ClientDevice {
   lastSeen: number;
 }
 
+// The part of a destination's usage attributed to one device. hwid is "" when the device is unknown.
+export interface DestinationDevice {
+  hwid: string;
+  short: string;
+  label: string;
+  up: number;
+  down: number;
+  lastSeen: number;
+}
+
 export interface DestinationRow {
   dest: string;
   network: string;
@@ -32,7 +42,23 @@ export interface DestinationRow {
   down: number;
   conns: number;
   total: number;
+  // Unix seconds of the latest use.
+  lastSeen: number;
+  devices: DestinationDevice[];
 }
+
+// A device (HWID) that fetched the client's subscription.
+export interface ClientHwidDevice {
+  hwid: string;
+  short: string;
+  label: string;
+  firstSeen: number;
+  lastSeen: number;
+  lastIp: string;
+}
+
+// Value of the device filter that selects usage not attributed to any device.
+export const NO_DEVICE = '-';
 
 export interface TrafficPoint {
   t: number;
@@ -113,7 +139,8 @@ export function useClientTraffic(email: string, range: InsightsRange, enabled: b
 export interface DestinationsFilter {
   nodeId?: number;
   q?: string;
-  sort: 'dest' | 'up' | 'down' | 'total' | 'conns';
+  hwid?: string;
+  sort: 'dest' | 'up' | 'down' | 'total' | 'conns' | 'last';
   order: 'asc' | 'desc';
 }
 
@@ -132,6 +159,7 @@ export function useClientDestinations(
           email,
           ...rangeParams(range),
           nodeId: filter.nodeId || undefined,
+          hwid: filter.hwid || undefined,
           q: filter.q || undefined,
           sort: filter.sort,
           order: filter.order,
@@ -139,5 +167,13 @@ export function useClientDestinations(
         [],
       ),
     enabled: enabled && !!email && (range.period !== 'custom' || !!(range.from && range.to)),
+  });
+}
+
+export function useClientHwidDevices(email: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['clientInsights', 'hwids', email],
+    queryFn: () => fetchObj<ClientHwidDevice[]>('hwids', { email }, []),
+    enabled: enabled && !!email,
   });
 }

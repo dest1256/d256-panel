@@ -80,6 +80,7 @@ func allModels() []any {
 		&model.ClientRecord{},
 		&model.ClientInbound{},
 		&model.ClientHwid{},
+		&model.ClientHwidIP{},
 		&model.ClientExternalLink{},
 		&model.ClientGroup{},
 		&model.InboundFallback{},
@@ -126,6 +127,17 @@ func migrateClientKeepAliveRangeColumn() error {
 	return migrator.AddColumn(&model.ClientRecord{}, "KeepAliveRange")
 }
 
+// dropLegacyConnStatIndexes removes the unique indexes that did not include the device (hwid): with them in
+// place, two devices using the same destination in the same hour could not both be stored.
+func dropLegacyConnStatIndexes() error {
+	for _, name := range []string{"ux_conn_hourly", "ux_conn_daily"} {
+		if err := db.Exec("DROP INDEX IF EXISTS " + name).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func initModels() error {
 	if err := migrateClientKeepAliveRangeColumn(); err != nil {
 		return err
@@ -154,6 +166,9 @@ func initModels() error {
 		}
 	}
 	if err := dropLegacyInboundPortUnique(); err != nil {
+		return err
+	}
+	if err := dropLegacyConnStatIndexes(); err != nil {
 		return err
 	}
 	if err := migrateHostVerifyPeerCertByNameColumn(); err != nil {

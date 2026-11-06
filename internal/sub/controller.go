@@ -730,6 +730,8 @@ func (a *SUBController) enforceHwid(c *gin.Context) bool {
 		c.Status(http.StatusNotFound)
 		return false
 	}
+	// The device is known to be allowed: remember where it came from, to attribute its VPN traffic.
+	a.clientService.RecordHwidIP(c.Param("subid"), c.GetHeader("X-HWID"), c.ClientIP())
 	return true
 }
 
